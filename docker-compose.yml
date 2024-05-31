@@ -1,13 +1,17 @@
 version: '3.9'
 
+networks:
+  net:
+
 services:
   db:
     image: postgres
+    networks:
+      - net
     env_file:
       - .env
   web:
     build: ./back/
-    command: bash -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:
@@ -16,3 +20,5 @@ services:
       - db
     env_file:
       - .env
+    networks:
+      - net
