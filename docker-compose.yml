@@ -10,6 +10,8 @@ services:
       - net
     env_file:
       - .env
+    volumes:
+      - ./trascendence/postgresql/data:/var/lib/postgresql/data
   web:
     build: ./back/
     volumes:
