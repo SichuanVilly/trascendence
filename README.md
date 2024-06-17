@@ -6,6 +6,8 @@ Teneis que instalaros docker compose V2 (docker compose version)
 
 ## USEFUL STUFF
 
+docker exec -it app-web-1  sh
+
 docker compose run web django-admin startproject trascendence (no need to do this)
 
 docker compose build
