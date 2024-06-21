@@ -34,11 +34,12 @@
         const paddleWidth = 10;
         const paddleHeight = 100;
         const ballSize = 20;
+        const paddleOffset = 20;  // Desplazamiento desde los bordes del mapa
 
         // Posiciones iniciales
-        let playerX = 0;
+        let playerX = paddleOffset;
         let playerY = (canvasHeight - paddleHeight) / 2;
-        let aiX = canvasWidth - paddleWidth;
+        let aiX = canvasWidth - paddleWidth - paddleOffset;
         let aiY = (canvasHeight - paddleHeight) / 2;
         let ballX = (canvasWidth - ballSize) / 2;
         let ballY = (canvasHeight - ballSize) / 2;
@@ -51,6 +52,10 @@
 
         // Incremento de velocidad
         const speedIncrement = 0.1;
+
+        // Puntuaciones
+        let playerScore = 0;
+        let aiScore = 0;
 
         // Cargar la imagen de la pelota
         const ballImage = new Image();
@@ -94,6 +99,19 @@
             context.setLineDash([]); // Restablecer
         }
 
+        // Dibujar puntuacion
+        function drawScores() 
+        {
+            context.font = '30px Arial';
+            context.fillStyle = '#fff';
+            context.fillText(playerScore, canvasWidth / 4, 50);
+            context.fillText(aiScore, (3 * canvasWidth) / 4, 50);
+
+            context.font = '20px Arial';
+            context.fillText('Player 1', canvasWidth / 4 - 30, 30);
+            context.fillText('Player 2', (3 * canvasWidth) / 4 - 30, 30);
+        }
+
         // Mover la barra del jugador
         function movePlayer() 
         {
@@ -127,24 +145,31 @@
             {
                 ballSpeedY *= -1;
             }
-            //choque de pelota
-            if (ballX < playerX + paddleWidth && ballY > playerY && ballY < playerY + paddleHeight) 
+
+            // Colisiones con las barras del jugador y de la IA
+            if ((ballX < playerX + paddleWidth && ballX + ballSize > playerX && ballY + ballSize > playerY && ballY < playerY + paddleHeight) || (ballX + ballSize > aiX && ballX < aiX + paddleWidth && ballY + ballSize > aiY && ballY < aiY + paddleHeight)) 
             {
                 ballSpeedX *= -1;
                 ballSpeedX += (ballSpeedX > 0 ? speedIncrement : -speedIncrement);
                 ballSpeedY += (ballSpeedY > 0 ? speedIncrement : -speedIncrement);
             }
 
-            if (ballX + ballSize > aiX && ballY > aiY && ballY < aiY + paddleHeight) 
+            if (ballX < 0) 
             {
-                ballSpeedX *= -1;
-                ballSpeedX += (ballSpeedX > 0 ? speedIncrement : -speedIncrement);
-                ballSpeedY += (ballSpeedY > 0 ? speedIncrement : -speedIncrement);
+                // Incrementar la puntuación de la IA
+                aiScore++;
+                // Reiniciar la pelota en el centro
+                ballX = (canvasWidth - ballSize) / 2;
+                ballY = (canvasHeight - ballSize) / 2;
+                ballSpeedX = 4;
+                ballSpeedY = 4;
             }
 
-            if (ballX < 0 || ballX + ballSize > canvasWidth) 
+            if (ballX + ballSize > canvasWidth) 
             {
-                // Reiniciar la pelota en el centro cuando pasa un limite y darle una velocidad
+                // Incrementar la puntuación del jugador
+                playerScore++;
+                // Reiniciar la pelota en el centro
                 ballX = (canvasWidth - ballSize) / 2;
                 ballY = (canvasHeight - ballSize) / 2;
                 ballSpeedX = 4;
@@ -168,6 +193,7 @@
             drawPaddle(playerX, playerY);
             drawPaddle(aiX, aiY);
             drawBall(ballX, ballY);
+            drawScores();
         }
 
         // Loop del juego
