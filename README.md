@@ -18,6 +18,10 @@ docker compose logs web
 
 docker exec -it [container-id] bash
 
+python manage.py makemigrations users
+
+python manage.py migrate
+
 -----------------------------------------
 
 HOW TO REMOVE STUFF 
