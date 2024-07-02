@@ -17,6 +17,11 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
+<<<<<<< HEAD
     path('', include('users.urls')),
+=======
+    path('', include('members.urls')),
+>>>>>>> aespinos
     path('admin/', admin.site.urls),
+    path('pong/', include('pong.urls')),
 ]
