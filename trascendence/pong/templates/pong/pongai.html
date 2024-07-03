@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Game</title>
+    <style>
+        body 
+        {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            margin: 0;
+        }
+        canvas 
+        {
+            border: 5px solid #fff;
+            width: 1200px;   /*ancho del canvas */
+            height: 800px;   /* alto del canvas */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="pongCanvas" width="1920" height="1080"></canvas>
+    <script>
+        const canvas = document.getElementById('pongCanvas');
+        const context = canvas.getContext('2d');
+
+        // Tamaño del canvas
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+
+        // Tamaño de las barras y la pelota
+        const paddleWidth = 20;   // Ancho de las barras
+        const paddleHeight = 160;  // Alto de las barras
+        const ballSize = 50;       // Tamaño de la pelotas
+        const paddleOffset = 0;   // Desplazamiento desde los bordes
+
+        // Posiciones iniciales
+        let playerX = paddleOffset;
+        let playerY = (canvasHeight - paddleHeight) / 2;
+        let aiX = canvasWidth - paddleWidth - paddleOffset;
+        let aiY = (canvasHeight - paddleHeight) / 2;
+        let ballX = (canvasWidth - ballSize) / 2;
+        let ballY = (canvasHeight - ballSize) / 2;
+
+        // Velocidades
+        let playerSpeed = 0;    // Velocidad del jugador (controlado por las teclas)
+        let aiSpeed = 5;        // Velocidad de la IA
+        let ballSpeedX = 4;     // Velocidad inicial X de la pelota
+        let ballSpeedY = 4;     // Velocidad inicial Y de la pelota
+
+        // Incremento de velocidad opcional de la pelota
+        const speedIncrement = 0.5;
+
+        // Puntuaciones
+        let playerScore = 0;
+        let aiScore = 0;
+
+        // Cargar la imagen de la pelota
+        const ballImage = new Image();
+        ballImage.src = '/static/pong/mario.png';
+
+        // Verificar que la imagen se haya cargado
+        ballImage.onload = function() 
+        {
+            console.log('Imagen de la pelota cargada');
+            gameLoop();
+        };
+
+        ballImage.onerror = function()
+        {
+            console.error('Error al cargar la imagen de la pelota');
+        };
+
+        // Dibujar barra
+        function drawPaddle(x, y, color) 
+        {
+            context.fillStyle = color;
+            context.fillRect(x, y, paddleWidth, paddleHeight);
+        }
+
+        // Dibujar pelota
+        function drawBall(x, y) 
+        {
+            context.drawImage(ballImage, x, y, ballSize, ballSize);
+        }
+
+        // Dibujar linea discontinua del centro
+        function drawNet() 
+        {
+            context.setLineDash([30, 20]); // Patrón de linea discontinua
+            context.beginPath();
+            context.moveTo(canvasWidth / 2, 0);
+            context.lineTo(canvasWidth / 2, canvasHeight);
+            context.strokeStyle = '#fff';
+            context.stroke();
+            context.setLineDash([]);
+        }
+
+        // Dibujar puntuación
+        function drawScores() {
+            context.font = '50px Arial';  // Ajusta el tamaño de la fuente para la puntuación
+            context.fillStyle = '#fff';
+            context.fillText(playerScore, canvasWidth / 4, 100);
+            context.fillText(aiScore, (3 * canvasWidth) / 4, 100);
+
+            context.font = '30px Arial';  // tamaño de la fuente para los nombres
+            context.fillText('Player 1', canvasWidth / 4 - 70, 50);  // posición de los nombres
+            context.fillText('Player 2', (3 * canvasWidth) / 4 - 70, 50);  // posición de los nombres
+        }
+
+        // Mover la barra del jugador
+        function movePlayer() 
+        {
+            playerY += playerSpeed;
+            if (playerY < 0) playerY = 0;
+            if (playerY + paddleHeight > canvasHeight) playerY = canvasHeight - paddleHeight;
+        }
+
+        // Mover la barra de la IA
+        function moveAI() 
+        {
+        // Calcular la posición futura de la pelota basada en su velocidad
+        var futureBallY = ballY + ballSpeedY * (canvasWidth - ballX) / ballSpeedX;
+
+        // Ajustar la posición de la IA basada en la posición futura de la pelota
+        if (futureBallY > aiY + paddleHeight / 2)
+            aiY += aiSpeed;
+        else 
+            aiY -= aiSpeed;
+
+        // Limitar la posición de la IA para que no se salga de los límites del canvas
+        if (aiY < 0) aiY = 0;
+        if (aiY + paddleHeight > canvasHeight) aiY = canvasHeight - paddleHeight;
+        }
+
+        // Mover la pelota
+        function moveBall() 
+        {
+            ballX += ballSpeedX;
+            ballY += ballSpeedY;
+
+            // Rebote en los bordes verticales
+            if (ballY < 0 || ballY + ballSize > canvasHeight)
+                ballSpeedY *= -1;
+
+            // Colisiones con las barras del jugador y de la IA
+            if ((ballX < playerX + paddleWidth && ballX + ballSize > playerX && ballY + ballSize > playerY && ballY < playerY + paddleHeight) || (ballX + ballSize > aiX && ballX < aiX + paddleWidth && ballY + ballSize > aiY && ballY < aiY + paddleHeight)) 
+            {
+                ballSpeedX *= -1;
+                ballSpeedX += (ballSpeedX > 0 ? speedIncrement : -speedIncrement);
+                ballSpeedY += (ballSpeedY > 0 ? speedIncrement : -speedIncrement);
+            }
+
+            // Puntuación del jugador 2 (IA)
+            if (ballX < 0) 
+            {
+                aiScore++;
+                resetBall();
+            }
+
+            // Puntuación del jugador 1 (jugador)
+            if (ballX + ballSize > canvasWidth) 
+            {
+                playerScore++;
+                resetBall();
+            }
+        }
+
+        // Función para reiniciar la posición de la pelota
+        function resetBall() 
+        {
+            ballX = (canvasWidth - ballSize) / 2;
+            ballY = (canvasHeight - ballSize) / 2;
+            ballSpeedX = 5;     // Velocidad inicial X de la pelota
+            ballSpeedY = 5;     // Velocidad inicial Y de la pelota
+        }
+
+        // Actualizar el juego
+        function update() 
+        {
+            movePlayer();
+            moveAI();
+            moveBall();
+        }
+
+        // Renderizar el juego
+        function render()
+        {
+            // Dibujar el fondo negro completo
+            context.fillStyle = '#000';
+            context.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            drawNet();
+            drawPaddle(playerX, playerY, '#0074D9');  // Barra del jugador izq azul
+            drawPaddle(aiX, aiY, '#FF4136');          // Barra de la IA der roja
+            drawBall(ballX, ballY);
+            drawScores();
+        }
+
+        // Loop del juego
+        function gameLoop() 
+        {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Eventos de teclado para mover la barra del jugador
+        document.addEventListener('keydown', function(event) 
+        {
+            if (event.key === 'ArrowUp')
+                playerSpeed = -10;
+            else if (event.key === 'ArrowDown') 
+                playerSpeed = 10;
+        });
+
+        document.addEventListener('keyup', function(event) 
+        {
+            if (event.key === 'ArrowUp' || event.key === 'ArrowDown') 
+                playerSpeed = 0;
+        });
+
+        // Iniciar el juego
+        gameLoop();
+    </script>
+</body>
+</html>

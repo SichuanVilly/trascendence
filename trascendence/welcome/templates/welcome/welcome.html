@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+            background-color: #111;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+        }
+        .container h1 {
+            margin-bottom: 20px;
+            font-size: 36px;
+            color: red;
+        }
+        .container button {
+            background-color: #1da1f2;
+            color: #fff;
+            padding: 14px;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .container button:hover {
+            background-color: #0f82bd;
+        }
+        .user-list {
+            margin-top: 20px;
+            text-align: left;
+        }
+        .user-list h2 {
+            color: #fff;
+        }
+        .user-list ul {
+            list-style: none;
+            padding: 0;
+        }
+        .user-list ul li {
+            color: #1da1f2;
+        }
+        .logout {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome, {{ user.username }}</h1>
+        <button onclick="window.location.href='/pongai'">Go to Pong ai</button>
+        <div class="user-list">
+            <h2>Other Users</h2>
+            <ul>
+                {% for user in users %}
+                    <li>{{ user.username }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="logout">
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit">Log Out</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
