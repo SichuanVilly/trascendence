@@ -51,8 +51,11 @@ USE DBEAVER
 database -> New Database connection -> PostgreSQL
 
 host -> sudo docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "container ID"
+
 Database -> myproject_db
+
 Username -> myproject_user
+
 Password -> myproject_password
 
 test connection -> ok
