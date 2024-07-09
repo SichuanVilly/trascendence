@@ -1,0 +1,92 @@
+<!DOCTYPE html> <!-- Declaración del tipo de documento HTML -->
+<html lang="en"> <!-- Inicio del documento HTML con especificación del idioma en inglés -->
+<head> <!-- Sección de encabezado del documento -->
+    <meta charset="UTF-8"> <!-- codificación de caracteres como UTF-8 (formato de codificación de caracteres) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Metaetiqueta para configurar la escala inicial y el ancho del viewport -->
+    <title>Welcome</title> <!-- Título -->
+    <style> /* estilo CSS */
+        body
+        {
+            background-color: #000; /* Color de fondo */
+            color: #fff; /* Color de texto */
+            display: flex; /* Uso Flexbox para el layout (https://es.wikipedia.org/wiki/CSS_Flexible_Box_Layout) */
+            justify-content: center; /* Centrado horizontal */
+            align-items: center; /* Centrado vertical */
+            height: 100vh; /* Altura del viewport */
+            margin: 0; /* Sin margen exterior */
+            font-family: Arial, sans-serif; /* fuentes */
+        }
+        .container 
+        {
+            text-align: center; /* centro el texto */
+            background-color: #111; /* Color de fondo */
+            padding: 40px; /* Relleno interno */
+            border-radius: 8px; /* Bordes redondeados */
+        }
+        .container h1
+        {
+            margin-bottom: 20px; /* Margen inferior*/
+            font-size: 36px; /* Tamaño de fuente */
+            color: red; /* Color de texto */
+        }
+        .container button 
+        {
+            background-color: #1da1f2; /* Color de fondo */
+            color: #fff; /* Color de texto*/
+            padding: 14px; /* Relleno interno*/
+            border: none; /* Sin borde */
+            border-radius: 5px; /* Bordes redondeados */
+            font-size: 18px; /* Tamaño de fuente*/
+            cursor: pointer; /* Cursor de ratón tipo dedo*/
+            margin: 10px; /* Margen exterior */
+        }
+        .container button:hover 
+        {
+            background-color: #0f82bd; /* Color de fondo */
+        }
+        .user-list 
+        {
+            margin-top: 20px; /* Margen superior*/
+            text-align: left; /* Alineación del texto a la izquierda para luego colocar mas botones a la derecha*/
+        }
+        .user-list h2 
+        {
+            color: #fff; /* Color de texto*/
+        }
+        .user-list ul 
+        {
+            list-style: none; /* Sin viñetas */
+            padding: 0; /* Sin relleno */
+        }
+        .user-list ul li 
+        {
+            color: #1da1f2; /* Color de texto*/
+        }
+        .logout 
+        {
+            margin-top: 20px; /* Margen superior */
+        }
+    </style>
+</head>
+<body>
+    <div class="container"> <!-- Inicio del divisin  -->
+        <h1>Welcome, {{ user.username }}</h1> <!-- Título de bienvenida con nombre de usuario -->
+        <button onclick="window.location.href='/pong/pongai/'">Go to Pong ai</button> <!-- Botón que redirige a la ruta del pong -->
+        <button onclick="window.location.href='/pong/ponglocal/'">Go to Pong local</button> <!-- Botón que redirige a la ruta del pong -->
+        <div class="user-list"> <!-- Inicio del division para la lista de usuarios -->
+            <h2>Other Users</h2> <!-- Encabezado de la lista de usuarios -->
+            <ul> <!-- Inicio de la lista -->
+                {% for user in users %} <!-- Bucle para iterar sobre los usuarios -->
+                    <li>{{ user.username }}</li> <!-- muestra el nombre de usuario -->
+                {% endfor %} <!-- Fin del bucle de usuarios -->
+            </ul> <!-- Fin de la lista -->
+        </div> <!-- Fin del division de lista de usuarios -->
+        <div class="logout"> <!-- Diviision para el  cierre de sesión -->
+            <form method="post" action="{% url 'logout' %}"> <!-- POST para cerrar sesión -->
+                {% csrf_token %} <!-- Token CSRF para proteccion-->
+                <button type="submit">Log Out</button> <!-- Botón para enviar el formulario de cierre de sesión -->
+            </form> <!-- Fin del formulario -->
+        </div> <!-- Fin del division de logout -->
+    </div> <!-- Fin del division principal -->
+</body>
+</html>
