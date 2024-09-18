@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Pong</title>
+    <style>
+        canvas {
+            background-color: #000;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Online Pong - Room {{ room.name }}</h1> <!-- Nombre de la sala dinámico -->
+
+    <canvas id="pongCanvas" width="800" height="400"></canvas> <!-- Canvas del juego Pong -->
+
+    <script>
+        // Este script se ejecuta en la página cargada desde /pong/{{ room.name }}/
+        const roomName = "{{ room.name }}";  // Esta es la sala a la que se conectan los jugadores
+        const ws = new WebSocket('ws://' + window.location.host + '/ws/pong/' + roomName + '/');  // Conexión WebSocket
+    
+        const canvas = document.getElementById('pongCanvas');
+        const ctx = canvas.getContext('2d');
+    
+        // Variables y lógica del juego
+        let player1Y = canvas.height / 2 - 50;
+        let player2Y = canvas.height / 2 - 50;
+        const paddleWidth = 10;
+        const paddleHeight = 100;
+    
+        let ballX = canvas.width / 2;
+        let ballY = canvas.height / 2;
+        let ballSpeedX = 5;
+        let ballSpeedY = 5;
+        const ballRadius = 10;
+    
+        // Funciones para dibujar el juego en el canvas
+        function drawPaddle(x, y) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x, y, paddleWidth, paddleHeight);
+        }
+    
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.closePath();
+        }
+    
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);  // Limpiar el canvas
+            drawPaddle(0, player1Y);  // Pala del jugador 1
+            drawPaddle(canvas.width - paddleWidth, player2Y);  // Pala del jugador 2
+            drawBall();  // Dibujar la pelota
+        }
+    
+        // Actualización de la posición de la pelota
+        function updateBall() {
+            ballX += ballSpeedX;
+            ballY += ballSpeedY;
+    
+            // Rebotar la pelota en las paredes superior e inferior
+            if (ballY + ballRadius > canvas.height || ballY - ballRadius < 0) {
+                ballSpeedY = -ballSpeedY;
+            }
+    
+            // Rebotar la pelota en las palas
+            if (ballX - ballRadius < paddleWidth) {
+                if (ballY > player1Y && ballY < player1Y + paddleHeight) {
+                    ballSpeedX = -ballSpeedX;
+                }
+            } else if (ballX + ballRadius > canvas.width - paddleWidth) {
+                if (ballY > player2Y && ballY < player2Y + paddleHeight) {
+                    ballSpeedX = -ballSpeedX;
+                }
+            }
+    
+            // Reiniciar la pelota si se sale de los límites laterales
+            if (ballX + ballRadius > canvas.width || ballX - ballRadius < 0) {
+                ballX = canvas.width / 2;
+                ballY = canvas.height / 2;
+                ballSpeedX = -ballSpeedX;
+            }
+        }
+    
+        // Bucle principal del juego
+        function gameLoop() {
+            draw();
+            updateBall();
+        }
+    
+        setInterval(gameLoop, 1000 / 60);  // Ejecutar el bucle del juego a 60 FPS
+    
+        // Función para enviar los movimientos de la pala al servidor
+        function sendMovement(direction) {
+            ws.send(JSON.stringify({
+                'message': direction
+            }));
+        }
+    
+        // Controlar la pala del jugador 1 con las teclas de flecha
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowUp') {
+                player1Y -= 20;
+                sendMovement('up');
+            } else if (event.key === 'ArrowDown') {
+                player1Y += 20;
+                sendMovement('down');
+            }
+        });
+    
+        // Recibir mensajes del servidor para actualizar el estado del juego
+        ws.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const message = data['message'];
+    
+            // Actualizar la posición del jugador 2 según el mensaje recibido
+            if (message === 'up') {
+                player2Y -= 20;
+            } else if (message === 'down') {
+                player2Y += 20;
+            }
+        };
+    
+        // Manejar el cierre del WebSocket
+        ws.onclose = function(e) {
+            console.error('WebSocket cerrado inesperadamente');
+        };
+    </script>
+    
+</body>
+</html>

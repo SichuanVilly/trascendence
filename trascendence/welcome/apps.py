@@ -1,4 +1,4 @@
-# myapp/apps.py
+# trascendence/apps.py
 from django.apps import AppConfig
 
 class MyAppConfig(AppConfig):

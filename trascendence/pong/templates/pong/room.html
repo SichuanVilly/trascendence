@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pong Room</title>
+</head>
+<body>
+    <h1>Room: {{ room_name }}</h1>
+    <div id="pong-game"></div>
+
+    <script>
+        const roomName = "{{ room_name }}";
+        const ws = new WebSocket('ws://' + window.location.host + '/ws/pong/' + roomName + '/');
+
+        ws.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            console.log(data.message);
+            // Aquí puedes manejar la lógica del juego Pong
+        };
+
+        ws.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+
+        document.querySelector('#pong-game').addEventListener('click', function() {
+            ws.send(JSON.stringify({
+                'message': 'Player action'
+            }));
+        });
+    </script>
+</body>
+</html>

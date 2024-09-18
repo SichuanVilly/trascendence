@@ -1,8 +1,9 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User  # Asegúrate de importar el modelo User
-from .models import UserSession
+from django.contrib.auth.models import User
+from .models import UserSession 
+from pong.models import GameRoom 
 
 def login_view(request):
     if request.method == "POST":
@@ -21,4 +22,22 @@ def login_view(request):
 def welcome_view(request):
     logged_in_users = UserSession.objects.exclude(user=request.user).values_list('user', flat=True)
     users = User.objects.filter(id__in=logged_in_users)
+
+    if request.method == 'POST':
+        room_id = request.POST.get('room_id')  # Obtén el ID de la sala del formulario
+        
+        # Verifica si la sala ya existe, de lo contrario la crea
+        room, created = GameRoom.objects.get_or_create(id=room_id)
+        
+        # Redirige a la sala de juego
+        return redirect('online_pong', room_id=room.id)
+
     return render(request, 'welcome/welcome.html', {'users': users})
+
+@login_required
+def online_pong_view(request, room_id):
+    # Obtén la sala de juego o devuelve un error 404 si no existe
+    room = get_object_or_404(GameRoom, id=room_id)
+    
+    # Aquí se manejaría la lógica de juego, websockets, etc.
+    return render(request, 'pong/online_pong.html', {'room': room})
