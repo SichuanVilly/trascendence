@@ -1,7 +1,15 @@
-# pong/consumers.py
-
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
+from redis.asyncio import Redis  # Asegúrate de tener instalado redis-py para conexiones asíncronas
+
+# Variable global para la conexión Redis
+redis = None
+
+async def get_redis_connection():
+    global redis
+    if redis is None:
+        redis = await Redis.from_url("redis://redis:6379", encoding="utf-8", decode_responses=True)
+    return redis
 
 class PongConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -13,21 +21,22 @@ class PongConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             self.channel_name
         )
+        await self.accept()
+        print(f"Connected to room group: {self.room_group_name}")
 
-        # Lista para llevar la cuenta de los jugadores
-        if 'players' not in self.scope['session']:
-            self.scope['session']['players'] = []
+        # Obtener el número de jugadores en la sala desde Redis
+        redis = await get_redis_connection()
+        player_count = await redis.zcard("asgi:group:pong_1")
+        print(f"Players in room: {player_count}")
 
-        # Aceptar la conexión si hay espacio para otro jugador
-        if len(self.scope['session']['players']) < 2:
-            self.scope['session']['players'].append(self.channel_name)
-            await self.accept()
-        else:
-            # Si ya hay dos jugadores, rechazar la conexión
-            await self.close()
-
-        # Si hay dos jugadores, iniciar el juego
-        if len(self.scope['session']['players']) == 2:
+        # Si es el primer jugador, enviar mensaje de espera
+        if player_count == 1:
+            await self.send(text_data=json.dumps({
+                'type': 'waiting',
+                'message': 'Esperando a otro jugador...'
+            }))
+        elif player_count == 2:
+            # Si hay dos jugadores, iniciar el juego
             await self.start_game()
 
     async def disconnect(self, close_code):
@@ -37,61 +46,49 @@ class PongConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
 
-        # Eliminar el jugador de la lista cuando se desconecta
-        if 'players' in self.scope['session'] and self.channel_name in self.scope['session']['players']:
-            self.scope['session']['players'].remove(self.channel_name)
-
     async def receive(self, text_data):
         data = json.loads(text_data)
-        
-        # Manejar el movimiento de la pala
-        if 'paddle_position' in data:
-            paddle_position = data['paddle_position']
-            new_game_state = self.update_game_state(paddle_position)
+        message = data.get('message')
 
-            # Enviar el nuevo estado del juego a todos los clientes conectados
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'game_update',
-                    'game_state': new_game_state
-                }
-            )
-
-    async def game_update(self, event):
-        game_state = event['game_state']
-
-        # Enviar el estado del juego al cliente
-        await self.send(text_data=json.dumps({
-            'game_state': game_state
-        }))
-
-    async def start_game(self):
-        # Inicializar el estado del juego y enviarlo a los clientes
-        initial_game_state = self.initialize_game_state()
+        # Enviar el nuevo estado del juego a todos los clientes conectados
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 'type': 'game_update',
-                'game_state': initial_game_state
+                'message': message
             }
         )
 
-    def update_game_state(self, paddle_position):
-        # Aquí se actualizará el estado del juego basándote en la posición de las palas
-        # Implementa la lógica para actualizar el estado del juego (posiciones, pelota, etc.)
-        game_state = {
-            'paddle_position': paddle_position,
-            # Actualiza otros elementos del juego aquí
-        }
-        return game_state
+    async def game_update(self, event):
+        message = event['message']
 
-    def initialize_game_state(self):
-        # Inicializa el estado del juego cuando ambos jugadores estén conectados
-        initial_state = {
-            'paddle1_position': 0,
-            'paddle2_position': 0,
-            'ball_position': [50, 50],
-            'ball_velocity': [1, 1]
-        }
-        return initial_state
+        # Enviar el estado del juego al cliente
+        await self.send(text_data=json.dumps({
+            'message': message
+        }))
+
+    async def start_game(self):
+        # Notificar a ambos jugadores que el juego puede comenzar
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'game_start',
+                'message': 'El juego ha comenzado!'
+            }
+        )
+
+    async def game_start(self, event):
+        # Enviar mensaje para comenzar el juego
+        await self.send(text_data=json.dumps({
+            'message': event['message']
+        }))
+
+    async def get_player_count(self):
+        # Obtener el número de jugadores conectados a la sala
+        group_data = await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'count_players'
+            }
+        )
+        return group_data.get('player_count', 1)  # Devuelve 1 si no se pudo contar correctamente

@@ -1,20 +1,21 @@
+
 <!DOCTYPE html>
-<html>
+<html> 
 <head>
-    <title>Pong Room</title>
+    <title>Pong Room</title> 
 </head>
 <body>
-    <h1>Room: {{ room_name }}</h1>
-    <div id="pong-game"></div>
+    <h1>Room: {{ room_name }}</h1> 
+    <div id="pong-game"></div> 
 
     <script>
-        const roomName = "{{ room_name }}";
+        const roomName = "{{ room_name }}"; /* NADA DE ESTE CODIGO SE USA YA */
         const ws = new WebSocket('ws://' + window.location.host + '/ws/pong/' + roomName + '/');
 
         ws.onmessage = function(e) {
             const data = JSON.parse(e.data);
             console.log(data.message);
-            // Aquí puedes manejar la lógica del juego Pong
+            
         };
 
         ws.onclose = function(e) {

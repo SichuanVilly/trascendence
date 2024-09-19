@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-($n9of^3z7+6yrf1tq4vih+7v^598@umep&uy02j+ey2ag3qiu
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0'] # <-- Ajusta según sea necesario
 
 
 # Application definition
@@ -45,7 +45,6 @@ INSTALLED_APPS = [
     'pong',
     'welcome',
     'channels',
-    
 ]
 
 ASGI_APPLICATION = 'trascendence.asgi.application'
@@ -55,7 +54,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [('127.0.0.1', 6379)],
+            "hosts": [('redis', 6379)],  # <-- Aquí usa 'redis' para apuntar al contenedor de Redis
         },
     },
 }
@@ -89,7 +88,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'trascendence.wsgi.application'
-ASGI_APPLICATION = 'trascendence.asgi.application'
+
 
 
 # Database
@@ -141,11 +140,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
-
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # <-- Añadido para servir archivos estáticos en producción
 
 
 # Default primary key field type
@@ -153,5 +149,5 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# pong_project/settings.py
+# Redirigir al login si no está autenticado
 LOGIN_URL = 'login'

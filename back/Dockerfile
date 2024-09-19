@@ -1,18 +1,28 @@
 # Use official Python base image
 FROM python:3.11
 
-# Set working directory
+# Set working directory inside the Docker container
 WORKDIR /app
 
-# Install dependencies
-COPY requirements.txt .
-COPY django.sh /django.sh
-RUN chmod +x /django.sh
+# Instalar dependencias del sistema necesarias
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar el archivo requirements.txt y ejecutar la instalación de dependencias
+COPY back/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
 
-# Expose the port the app will run on
+
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ../trascendence /app/trascendence
+
 EXPOSE 8000
 
-CMD ["sh", "/django.sh"]  
+CMD ["sh", "/django.sh"]

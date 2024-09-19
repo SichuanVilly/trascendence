@@ -1,6 +1,9 @@
 #!/bin/bash
+export DJANGO_SETTINGS_MODULE=trascendence.settings
 
-cd trascendence
+# No es necesario hacer cd si ya estás en el directorio correcto
+# cd trascendence  
+
 # Verificar si el superusuario ya existe
 if python manage.py shell -c "from django.contrib.auth.models import User; print(User.objects.filter(username='admin').exists())" | grep -q "True"; then
     echo "Superuser already exists"
@@ -20,3 +23,4 @@ echo ====================================
 
 echo "Starting Server..."
 python manage.py runserver 0.0.0.0:8000
+
