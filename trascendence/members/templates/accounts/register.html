@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"> <!-- codificación de caracteres como UTF-8 (formato de codificación de caracteres) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Configuro la vista para que sea responsiva en diferentes dispositivos -->
+    <title>Register</title> <!-- Titulo de la página -->
+    <style> /* Estilo CSS para la página */
+        body 
+        {
+            background-color: #000; /* Color de fondo negro*/
+            color: #fff; /* Color de texto blanco */
+            display: flex; /* Uso Flexbox para el layout (https://es.wikipedia.org/wiki/CSS_Flexible_Box_Layout) */
+            justify-content: center; /* Centra horizontalmente */
+            align-items: center; /* Centra verticalmente  */
+            height: 100vh; /* Altura del viewport */
+            margin: 0; /* Elimina el margen exterior */
+            font-family: Arial, sans-serif; /* Fuente del texto */
+            overflow: hidden; /* Para que no sea mas grande que la pagina */
+            position: relative; /* Posicion relativa para el body */
+        }
+        .container /* cuadrado del centro con el usuario, la contraseña y botones */
+        {
+            width: 100%; /* Ancho completo */
+            max-width: 400px; /* Ancho máximo */
+            text-align: center; /* texto al centro */
+            padding: 40px; /* Espacio interior */
+            border-radius: 8px; /* Bordes redondeados */
+            z-index: 1; /* Asegura que el contenedor esté sobre otros elementos */
+        }
+        .container h1 /* primera linea del cuadrado */
+        {
+            margin-bottom: 20px; /* Margen inferior del titulo */
+            font-size: 36px; /* Tamaño de fuente grande para el titulo */
+            color: red; /* Color rojo para el título */
+        }
+        .container form {
+            display: flex; /* Flexbox para el layout */
+            flex-direction: column; /* forma de columna */
+        }
+        .container form input[type="text"], /* cuadrado grande para añadir el username */
+        .container form input[type="password"] /* cuadrado grande para añadir el en forma de contraseña (sin que se vea) */
+        {
+            padding: 12px; /* Espacio interno */
+            margin-bottom: 20px; /* Espacio inferior*/
+            border: 1px solid #666; /* Borde gris oscuro */
+            border-radius: 5px; /* Bordes redondeados */
+            font-size: 16px; /* Tamaño de fuente */
+            background-color: #333; /* Fondo gris oscuro */
+            color: #fff; /* Texto blanco */
+            outline: none; /* Sin borde de enfoque al clicar en el cuadrado */
+        }
+        .container form button[type="submit"] 
+        {
+            background-color: #1da1f2; /* Fondo azul */
+            color: #fff; /* Texto blanco */
+            padding: 14px; /* Relleno de 14px */
+            border: none; /* Sin borde */
+            border-radius: 5px; /* Bordes redondeados */
+            font-size: 18px; /* Tamaño de fuente de 18px */
+            cursor: pointer; /* Cambia el cursor al pasar sobre el botón, queda mas profesional no?*/
+        }
+        .container form button[type="submit"]:hover  /* Boton para aceptar (hover significa al pasar el raton por encima)*/
+        {
+            background-color: #0f82bd;  /* Fondo azul oscuro al pasar el ratón y hacer enfasis en que lo vas a clicar*/
+        }
+        .container .error 
+        {
+            display: none; /* Oculta los mensajes de error por defecto */
+            color: red; /* Color para los mensajes de error */
+            font-size: 14px; /* Tamaño de fuente */
+        }
+        .container .error.active 
+        {
+            display: block; /* Muestra los mensajes de error activos */
+        }
+        .container p a /* Enlace para ir al login */
+        {
+            color: #1da1f2; /* Color azul para los enlaces dentro de los párrafos */
+            text-decoration: none; /* Sin subrayado predeterminado para los enlaces */
+        }
+        .container p a:hover 
+        {
+            text-decoration: underline; /* Subrayado al pasar el ratón sobre los enlaces */
+        }
+        .ball /* Las mario bolas */
+        {
+            position: absolute; /* Posiciona las pelotas */
+            z-index: 0; /* lo coloca detrás del contenedor */
+        }
+    </style> <!-- Fin de la sección de estilos CSS internos -->
+</head>
+<body>
+    <div class="container"> <!-- Inicio del division -->
+        <h1>WELCOME TO MARIO PONG</h1><!-- titulo -->
+        <form method="post"> <!-- Formulario que usa el método POST para enviar datos (https://en.wikipedia.org/wiki/POST_(HTTP))-->
+            {% csrf_token %} <!-- Token CSRF para proteger contra ataques CSRF (https://portswigger.net/web-security/csrf)-->
+
+            <!-- si quereis saber mas de los FORM de django (https://docs.djangoproject.com/en/5.0/topics/forms/)-->
+
+            {{ form.username.label_tag }} <!-- Etiqueta del campo de nombre de usuario -->
+            {{ form.username }} <!-- Campo de entrada para el nombre de usuario -->
+            <br> <!-- Salto de linea -->
+            {{ form.password1.label_tag }} <!-- Etiqueta del primer campo de contraseña -->
+            {{ form.password1 }} <!-- Campo de entrada para la primera contraseña -->
+            <br> <!-- Salto de linea -->
+            {{ form.password2.label_tag }} <!-- Etiqueta del segundo campo de contraseña -->
+            {{ form.password2 }} <!-- Campo de entrada para la confirmación de contraseña -->
+            <br> <!-- Salto de línea -->
+            <button type="submit">Register</button> <!-- Boton para enviar el formulario -->
+            {% if form.errors %} <!-- verificar si hay errores -->
+                {% for field in form %} <!-- Bucle para iterar sobre los campos del formulario -->
+                    {% for error in field.errors %} <!-- Bucle para iterar sobre los errores de cada campo -->
+                        <p class="error active">{{ error }}</p> <!-- muestra el mensaje de error -->
+                    {% endfor %}
+                {% endfor %}
+            {% endif %} <!-- Fin de la condición para errores en el formulario -->
+        </form> <!-- Fin del formulario -->
+        <p>Already have an account? <a href="{% url 'login' %}">Login here</a></p> <!-- Párrafo con enlace para iniciar sesión si ya se tiene una cuenta -->
+    </div> <!-- Fin del division-->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const numBalls = 1;
+            const ballSize = 200;
+            const ballElements = [];
+            const speeds = [];
+
+            /* Bucle para crear las bolas */
+            for (let i = 0; i < numBalls; i++) 
+            {
+                const ball = document.createElement('canvas');
+                ball.className = 'ball';
+                ball.width = ballSize;
+                ball.height = ballSize;
+                ball.style.left = Math.random() * (window.innerWidth - ball.width) + 'px';
+                ball.style.top = Math.random() * (window.innerHeight - ball.height) + 'px';
+                document.body.appendChild(ball);
+                ballElements.push(ball);
+
+                speeds.push({x: 2 + Math.random() * 3, y: 2 + Math.random() * 3});
+
+                const ctx = ball.getContext('2d');
+                const ballImage = new Image();
+                ballImage.src = '/static/images/mario.png';
+                ballImage.onload = () => {
+                    ctx.drawImage(ballImage, 0, 0, ball.width, ball.height);
+                };
+            }
+
+            function moveBalls() 
+            {
+                ballElements.forEach((ball, index) => {
+                    const rect = ball.getBoundingClientRect();
+                    const speed = speeds[index];
+
+                    let x = rect.left + speed.x;
+                    let y = rect.top + speed.y;
+
+                    if (x + rect.width >= window.innerWidth || x <= 0)
+                        speeds[index].x = -speed.x;
+                    if (y + rect.height >= window.innerHeight || y <= 0)
+                        speeds[index].y = -speed.y;
+
+                    ball.style.left = x + 'px';
+                    ball.style.top = y + 'px';
+                });
+
+                requestAnimationFrame(moveBalls); /* siguiente animación del cuadro */
+            }
+
+            moveBalls(); /* Inicia el movimiento de las bolas */
+        });
+    </script>
+</body>
+</html>
