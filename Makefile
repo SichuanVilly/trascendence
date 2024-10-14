@@ -5,7 +5,7 @@ DOWNFLAG = --volumes --rmi all
 all: build
 
 build:
-	@docker compose -f ${COMPOSE_SRCS} up --build ${UPFLAG}
+	@docker compose -f ${COMPOSE_SRCS} up --build #${UPFLAG}
 
 up:
 	@docker compose -f ${COMPOSE_SRCS} up ${UPFLAG}

@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-($n9of^3z7+6yrf1tq4vih+7v^598@umep&uy02j+ey2ag3qiu
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
 
 
 # Application definition
@@ -42,11 +42,25 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
+    'apps.chat',
     'apps.core',
     'apps.members',
     'apps.pong',
     'apps.welcome',
 ]
+
+ASGI_APPLICATION = 'ft_trascendence.asgi.application'
+
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('redis', 6380)],  # <-- Aquí usa 'redis' para apuntar al contenedor de Redis
+        },
+    },
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -133,10 +147,16 @@ STATIC_URL = 'static/'
 STATIC_ROOT = '/django/static/'
 
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',
+    os.path.join(BASE_DIR / 'static'),
+    os.path.join(BASE_DIR / 'apps' / 'members' / 'static'),
+    os.path.join(BASE_DIR / 'apps' / 'pong' / 'static'),
+    os.path.join(BASE_DIR / 'apps' / 'welcome' / 'static'),
 ]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Redirigir al login si no está autenticado
+LOGIN_URL = 'login'

@@ -10,7 +10,7 @@ RUN pip install --root-user-action ignore --no-cache-dir -r requirements.txt
 
 COPY --chmod=744 --chown=django_user:django_user ./conf/entrypoint.sh ./
 
-WORKDIR /django/ft_transcendence
+WORKDIR /django/ft_transcendence/
 
 COPY --chmod=744 --chown=django_user:django_user ./ft_transcendence/ ./
 

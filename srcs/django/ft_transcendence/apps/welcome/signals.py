@@ -1,7 +1,7 @@
 from django.contrib.auth.signals import user_logged_in, user_logged_out
 from django.dispatch import receiver
 from django.utils.timezone import now
-from .models import UserSession
+from apps.welcome.models import UserSession
 
 # sender: Es el objeto que envia la señal
 # request: Es el objeto HttpRequest asociado con la solicitud actual, contiene informacion sobre la solicitud HTTP de la señal

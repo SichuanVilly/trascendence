@@ -21,4 +21,5 @@ urlpatterns = [
     path('members/', include('apps.members.urls')),
     path('pong/', include('apps.pong.urls')),
     path('welcome/', include('apps.welcome.urls')),
+    path('chat/', include('apps.chat.urls')),
 ]

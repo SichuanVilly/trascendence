@@ -1,3 +1,11 @@
 django==5.1
 psycopg2-binary==2.9.9
 django-environ==0.11.2
+channels
+channels-redis
+uvicorn
+uvloop>=0.14.0
+httptools>=0.5.0
+uvicorn[standard]
+websockets
+redis==5.0.0
