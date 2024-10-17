@@ -24,6 +24,11 @@ clean:
 
 prune:
 	@docker system prune -af --volumes
+	@find . -name '__pycache__' -exec rm -rf {} +
+	@find . -name '*.pyc' -delete
+	@find . -name '*.pyo' -delete
+	@find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
+	@find . -path "*/migrations/*.pyc" -delete
 
 fclean: clean prune
 

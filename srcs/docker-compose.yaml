@@ -41,7 +41,7 @@ services:
     container_name: migration
     build:
       context: ./django
-    entrypoint: python manage.py makemigrations && python manage.py migrate --noinput
+    entrypoint: "/django/migration_entrypoint.sh"
     depends_on:
       redis:
         condition: service_started

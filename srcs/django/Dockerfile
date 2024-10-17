@@ -8,7 +8,9 @@ COPY --chmod=744 ./conf/requirements.txt ./
 
 RUN pip install --root-user-action ignore --no-cache-dir -r requirements.txt
 
-COPY --chmod=744 --chown=django_user:django_user ./conf/entrypoint.sh ./
+COPY --chmod=744 --chown=django_user:django_user ./conf/migration_entrypoint.sh ./
+
+COPY --chmod=744 --chown=django_user:django_user ./conf/django_entrypoint.sh ./
 
 WORKDIR /django/ft_transcendence/
 
@@ -18,4 +20,4 @@ EXPOSE 8000
 
 #USER django_user
 
-ENTRYPOINT [ "/django/entrypoint.sh" ]
+ENTRYPOINT [ "/django/django_entrypoint.sh" ]
