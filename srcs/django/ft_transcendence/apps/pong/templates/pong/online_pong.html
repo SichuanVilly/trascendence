@@ -3,99 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Online Pong</title>
-    <style>
-        canvas {
-            background-color: #000;
-            display: none; /* El canvas estaoculto hasta que los dos jugadores se conecten */
-            margin: 0 auto;
-        }
-
-        #waitingMessage {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 24px;
-            color: #fff;
-        }
-    </style>
+    <title>Juego Pong Online</title>
 </head>
 <body>
-    <h1>Online Pong - Room {{ room.name }}</h1>
-
-    <div id="waitingMessage">Esperando a otro jugador...</div>
-    <canvas id="pongCanvas" width="800" height="400"></canvas>
+    <h1>Juego Pong Online</h1>
+    <div id="game-area">
+        <canvas id="pongCanvas" width="800" height="400"></canvas>
+        <div id="waitingMessage" style="display:none;">Esperando a otro jugador...</div>
+    </div>
 
     <script>
-        // que webSocket solo se abra una vez
-        let ws;
+        const roomName = "{{ room_name }}";  // Nombre de la sala
+        const socket = new WebSocket(`ws://${window.location.host}/ws/pong/online_pong/${roomName}/`);
 
-        function connectWebSocket() {
-            if (!ws || ws.readyState === WebSocket.CLOSED) {
-                const roomName = "{{ room.name }}";  // Asegurarse de que esto tenga un valor valido
-                ws = new WebSocket('ws://' + window.location.host + '/ws/pong/' + roomName + '/');
+        socket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        console.log(data.message);
+        };
 
-                ws.onopen = function () {
-                    console.log('WebSocket connection opened');
-                };
+        socket.onclose = function(event) {
+            console.log("Conexión cerrada");
+        };
 
-                ws.onmessage = function (e) {
-                    const data = JSON.parse(e.data);
-                    const message = data['message'];
-
-                    // mensaje de espera y el inicio del juego
-                    if (message === 'Esperando a otro jugador...') {
-                        document.getElementById('waitingMessage').style.display = 'block';
-                        document.getElementById('pongCanvas').style.display = 'none';
-                    } else if (message === 'El juego ha comenzado!') {
-                        document.getElementById('waitingMessage').style.display = 'none';
-                        document.getElementById('pongCanvas').style.display = 'block';
-                        startGame();  //función para iniciar el juego
-                    }
-
-                    // mensajes de movimiento de las barras
-                    if (message === 'up') {
-                        player2Y -= 20;
-                    } else if (message === 'down') {
-                        player2Y += 20;
-                    }
-                };
-
-                ws.onclose = function (e) {
-                    console.error('WebSocket closed unexpectedly');
-                    // intenta reconectar cada segundo si hay algun problema
-                    setTimeout(connectWebSocket, 1000);
-                };
-
-                ws.onerror = function (error) {
-                    console.error('WebSocket error: ', error);
-                };
-            }
+        function sendMessage(message) {
+            socket.send(JSON.stringify({ 'message': message }));
         }
-
-        // Funcion para conectar el Websocket
-        connectWebSocket();
-
         const canvas = document.getElementById('pongCanvas');
         const ctx = canvas.getContext('2d');
-
-        let player1Y = canvas.height / 2 - 50;
-        let player2Y = canvas.height / 2 - 50;
+        let player1Y = 150;
+        let player2Y = 150;
+        let ballX = 400;
+        let ballY = 200;
         const paddleWidth = 10;
         const paddleHeight = 100;
-
-        let ballX = canvas.width / 2;
-        let ballY = canvas.height / 2;
-        let ballSpeedX = 5;
-        let ballSpeedY = 5;
         const ballRadius = 10;
 
-        // Dibujar las palas y la pelota
-        function drawPaddle(x, y) {
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(x, y, paddleWidth, paddleHeight);
-        }
+        // Conexión WebSocket
+        socket.onopen = function() {
+            console.log('Conexión WebSocket abierta');
+        };
 
-        function drawBall() {
+        // Recepción de mensajes del servidor
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            // Actualizar posiciones
+            player1Y = data.player1Y;
+            player2Y = data.player2Y;
+            ballX = data.ballX;
+            ballY = data.ballY;
+
+            draw();
+        };
+
+        // Conexión cerrada
+        socket.onclose = function() {
+            console.log('Conexión cerrada');
+        };
+
+        function draw() {
+            // Limpiar el canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar palas
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, player1Y, paddleWidth, paddleHeight);  // Pala del jugador 1 (izquierda)
+            ctx.fillRect(canvas.width - paddleWidth, player2Y, paddleWidth, paddleHeight);  // Pala del jugador 2 (derecha)
+
+            // Dibujar la pelota
             ctx.beginPath();
             ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
             ctx.fillStyle = '#fff';
@@ -103,72 +78,22 @@
             ctx.closePath();
         }
 
-        function draw() {
-            // Limpiar el canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Dibujar palas
-            drawPaddle(0, player1Y);  // Pala del jugador 1 (izquierda)
-            drawPaddle(canvas.width - paddleWidth, player2Y);  // Pala del jugador 2 (derecha)
-
-            // Dibujar pelota
-            drawBall();
-        }
-
-        function updateBall() {
-            ballX += ballSpeedX;
-            ballY += ballSpeedY;
-
-            // Rebotar en la parte superior e inferior del canvas
-            if (ballY + ballRadius > canvas.height || ballY - ballRadius < 0) {
-                ballSpeedY = -ballSpeedY;
-            }
-
-            // Verificar colisiones con las barras
-            if (ballX - ballRadius < paddleWidth) {
-                if (ballY > player1Y && ballY < player1Y + paddleHeight) {
-                    ballSpeedX = -ballSpeedX;
-                }
-            } else if (ballX + ballRadius > canvas.width - paddleWidth) {
-                if (ballY > player2Y && ballY < player2Y + paddleHeight) {
-                    ballSpeedX = -ballSpeedX;
-                }
-            }
-
-            // Restablecer la pelota si se sale por los lados
-            if (ballX + ballRadius > canvas.width || ballX - ballRadius < 0) {
-                ballX = canvas.width / 2;
-                ballY = canvas.height / 2;
-                ballSpeedX = -ballSpeedX;
-            }
-        }
-
-        function gameLoop() {
-            draw();
-            updateBall();
-        }
-
-        function startGame() {
-            setInterval(gameLoop, 1000 / 60);  // Actualiza el juego a 60 FPS
-        }
-
-        // Enviar movimiento de la barra al servidor
-        function sendMovement(direction) {
-            ws.send(JSON.stringify({
-                'message': direction
-            }));
-        }
-
-        // Controlar las barra con las teclas de flecha
+        // Control de movimiento para el jugador
         document.addEventListener('keydown', function(event) {
             if (event.key === 'ArrowUp') {
-                player1Y -= 20;
                 sendMovement('up');
             } else if (event.key === 'ArrowDown') {
-                player1Y += 20;
                 sendMovement('down');
             }
         });
+
+        // Función para enviar movimiento al servidor
+        function sendMovement(direction) {
+            socket.send(JSON.stringify({ 'direction': direction }));
+        }
+
+        // Llamar la función de dibujo inicial
+        draw();
     </script>
 </body>
 </html>

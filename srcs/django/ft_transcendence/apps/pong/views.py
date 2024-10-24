@@ -16,7 +16,7 @@ def room(request, room_name):
         room.players.add(request.user)
     return render(request, 'room.html', {'room_name': room_name})
 
-# Vista para unirse a una sala de juego y empezar a jugar en línea
-def online_pong_view(request, room_id):
-    room = get_object_or_404(GameRoom, id=room_id)  # Obtener la sala de juego o devolver un 404 si no existe
-    return render(request, 'pong/online_pong.html', {'room': room})  # Renderizar la plantilla del juego en línea con la sala
+def online_pong_view(request, room_name):
+    room = get_object_or_404(GameRoom, id=room_name)  # Obtener la sala de juego o devolver un 404 si no existe
+    room_name = room.id  # O room.name si tienes un campo 'name' 
+    return render(request, 'pong/online_pong.html', {'room_name': room_name})  # Renderizar la plantilla con la sala

@@ -57,7 +57,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [('redis', 6380)],  # <-- Aquí usa 'redis' para apuntar al contenedor de Redis
+            "hosts": [('redis', 6379)],  # <-- Aquí usa 'redis' para apuntar al contenedor de Redis
         },
     },
 }

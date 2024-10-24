@@ -98,7 +98,7 @@
             <h2>Join or Create a Game Room</h2> <!-- Título del formulario de sala de juego -->
             <form method="post" action="{% url 'welcome' %}"> <!-- Envío del formulario al servidor -->
                 {% csrf_token %} <!-- Token CSRF para proteger el formulario -->
-                <input type="text" name="room_id" placeholder="Enter room ID" required> <!-- Campo para ingresar el ID de la sala -->
+                <input type="text" name="room_name" placeholder="Enter room ID" required> <!-- Campo para ingresar el ID de la sala -->
                 <button type="submit">Join Room</button> <!-- Botón para unirse a la sala -->
             </form> <!-- Fin del formulario -->
         </div> <!-- Fin de la sección del formulario de la sala de juego -->
