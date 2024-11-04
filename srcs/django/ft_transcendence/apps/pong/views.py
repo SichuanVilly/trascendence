@@ -17,6 +17,12 @@ def room(request, room_name):
     return render(request, 'room.html', {'room_name': room_name})
 
 def online_pong_view(request, room_name):
-    room = get_object_or_404(GameRoom, id=room_name)  # Obtener la sala de juego o devolver un 404 si no existe
-    room_name = room.id  # O room.name si tienes un campo 'name' 
-    return render(request, 'pong/online_pong.html', {'room_name': room_name})  # Renderizar la plantilla con la sala
+    # Intenta obtener la sala o crearla si no existe usando el `name` en lugar del `id`.
+    room, created = GameRoom.objects.get_or_create(name=room_name)
+    
+    if created:
+        print("New room created with name:", room_name)
+    else:
+        print("Room already exists with name:", room_name)
+
+    return render(request, 'pong/online_pong.html', {'room_name': room_name})

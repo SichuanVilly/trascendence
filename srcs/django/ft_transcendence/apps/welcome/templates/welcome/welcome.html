@@ -2,13 +2,13 @@
 <html lang="en"> <!-- Inicio del documento HTML con especificación del idioma en inglés -->
 <head> <!-- Sección de encabezado del documento -->
     <meta charset="UTF-8"> <!-- Codificación de caracteres como UTF-8 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Metaetiqueta para configurar la escala inicial y el ancho del viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Configura la escala inicial y el ancho del viewport -->
     <title>Welcome</title> <!-- Título de la página -->
-    <style> /* Estilo CSS */
+    <style> /* Estilos CSS */
         body {
-            background-color: #000; /* Color de fondo */
-            color: #fff; /* Color del texto */
-            display: flex; /* Uso de Flexbox para centrar */
+            background-color: #000; /* Fondo negro */
+            color: #fff; /* Texto blanco */
+            display: flex; /* Flexbox para centrar */
             justify-content: center; /* Centrado horizontal */
             align-items: center; /* Centrado vertical */
             height: 100vh; /* Altura del viewport */
@@ -16,97 +16,79 @@
             font-family: Arial, sans-serif; /* Fuente */
         }
         .container {
-            text-align: center; /* Alinear texto al centro */
-            background-color: #111; /* Color de fondo del contenedor */
-            padding: 40px; /* Espaciado interior */
+            text-align: center; /* Texto centrado */
+            background-color: #111; /* Fondo gris oscuro */
+            padding: 40px; /* Espaciado interno */
             border-radius: 8px; /* Bordes redondeados */
         }
         .container h1 {
             margin-bottom: 20px; /* Espaciado debajo del título */
-            font-size: 36px; /* Tamaño de la fuente */
-            color: red; /* Color del texto */
+            font-size: 36px; /* Tamaño de fuente */
+            color: red; /* Texto rojo */
         }
         .container button {
-            background-color: #1da1f2; /* Color de fondo del botón */
-            color: #fff; /* Color del texto */
-            padding: 14px; /* Espaciado interior del botón */
+            background-color: #1da1f2; /* Fondo azul */
+            color: #fff; /* Texto blanco */
+            padding: 14px; /* Espaciado interno */
             border: none; /* Sin borde */
             border-radius: 5px; /* Bordes redondeados */
-            font-size: 18px; /* Tamaño de la fuente */
-            cursor: pointer; /* Estilo de cursor */
-            margin: 10px; /* Margen alrededor del botón */
+            font-size: 18px; /* Tamaño de fuente */
+            cursor: pointer; /* Cursor de mano */
+            margin: 10px; /* Margen alrededor */
         }
         .container button:hover {
-            background-color: #0f82bd; /* Cambio de color cuando el botón es presionado */
+            background-color: #0f82bd; /* Cambio de color en hover */
         }
         .user-list {
             margin-top: 20px; /* Margen superior */
-            text-align: left; /* Alineación de la lista de usuarios */
+            text-align: left; /* Alineación izquierda */
         }
         .user-list h2 {
-            color: #fff; /* Color del encabezado de la lista de usuarios */
+            color: #fff; /* Color de encabezado blanco */
         }
         .user-list ul {
-            list-style: none; /* Eliminar viñetas de la lista */
-            padding: 0; /* Eliminar relleno interno */
+            list-style: none; /* Sin viñetas */
+            padding: 0; /* Sin relleno */
         }
         .user-list ul li {
-            color: #1da1f2; /* Color del texto en la lista de usuarios */
+            color: #1da1f2; /* Texto azul */
         }
         .logout {
-            margin-top: 20px; /* Margen superior del botón de logout */
-        }
-        .room-form { /* Estilos para el formulario de las salas */
             margin-top: 20px; /* Margen superior */
         }
-        .room-form input {
-            padding: 10px; /* Espaciado interior del input */
-            font-size: 16px; /* Tamaño de la fuente */
-            border-radius: 5px; /* Bordes redondeados */
-            border: none; /* Sin borde */
-            margin-right: 10px; /* Margen derecho */
-        }
-        .room-form button {
-            background-color: #28a745; /* Color de fondo del botón de la sala */
-            color: #fff; /* Color del texto */
-            padding: 10px 20px; /* Espaciado interior del botón */
-            border: none; /* Sin borde */
-            border-radius: 5px; /* Bordes redondeados */
-            cursor: pointer; /* Estilo del cursor */
-        }
-        .room-form button:hover {
-            background-color: #218838; /* Cambio de color cuando se presiona el botón */
+        .room-form { /* Estilos para el formulario de la sala */
+            margin-top: 20px; /* Margen superior */
         }
     </style>
 </head>
 <body>
     <div class="container"> <!-- Contenedor principal -->
-        <h1>Welcome, {{ user.username }}</h1> <!-- Título con el nombre del usuario -->
-        <button onclick="window.location.href='/pong/pongai/'">Go to Pong AI</button> <!-- Botón que redirige a la ruta del pong AI -->
-        <button onclick="window.location.href='/pong/ponglocal/'">Go to Pong Local</button> <!-- Botón que redirige a la ruta del pong local -->
+        <h1>Welcome, {{ user.username }}</h1> <!-- Muestra el nombre de usuario actual -->
 
-        <div class="user-list"> <!-- Sección de la lista de usuarios -->
-            <h2>Other Users</h2> <!-- Encabezado de la lista de usuarios -->
-            <ul> <!-- Lista sin viñetas para mostrar los usuarios -->
-                {% for user in users %} <!-- Bucle que itera sobre los usuarios conectados -->
-                    <li>{{ user.username }}</li> <!-- Mostrar el nombre de cada usuario -->
+        <!-- Botones de navegación para juegos -->
+        <button onclick="window.location.href='/pong/pongai/'">Go to Pong AI</button> <!-- Botón para Pong AI -->
+        <button onclick="window.location.href='/pong/ponglocal/'">Go to Pong Local</button> <!-- Botón para Pong Local -->
+
+        <div class="user-list"> <!-- Sección de lista de usuarios -->
+            <h2>Other Users</h2> <!-- Título de usuarios -->
+            <ul> <!-- Lista sin viñetas para usuarios conectados -->
+                {% for user in users %} <!-- Bucle sobre usuarios conectados -->
+                    <li>{{ user.username }}</li> <!-- Nombre de cada usuario conectado -->
                 {% endfor %} <!-- Fin del bucle de usuarios -->
             </ul> <!-- Fin de la lista de usuarios -->
-        </div> <!-- Fin de la sección de la lista de usuarios -->
+        </div> <!-- Fin de la lista de usuarios -->
 
-        <div class="room-form"> <!-- Formulario para ingresar la ID de la sala de juego -->
-            <h2>Join or Create a Game Room</h2> <!-- Título del formulario de sala de juego -->
-            <form method="post" action="{% url 'welcome' %}"> <!-- Envío del formulario al servidor -->
-                {% csrf_token %} <!-- Token CSRF para proteger el formulario -->
-                <input type="text" name="room_name" placeholder="Enter room ID" required> <!-- Campo para ingresar el ID de la sala -->
-                <button type="submit">Join Room</button> <!-- Botón para unirse a la sala -->
-            </form> <!-- Fin del formulario -->
-        </div> <!-- Fin de la sección del formulario de la sala de juego -->
+        <!-- Botón para unirse a una sala de juego específica -->
+        <div class="room-form">
+            <h2>Join Game Room</h2> <!-- Título de la sección de la sala -->
+            <button onclick="window.location.href='/pong/online_pong/1/'">Enter Room 1</button> <!-- Redirige a la sala de juego -->
+        </div>
 
-        <div class="logout"> <!-- Sección del botón para cerrar sesión -->
-            <form method="post" action="{% url 'logout' %}"> <!-- Formulario para cerrar sesión -->
-                {% csrf_token %} <!-- Token CSRF para proteger el formulario -->
-                <button type="submit">Log Out</button> <!-- Botón para cerrar sesión -->
+        <!-- Botón de cierre de sesión -->
+        <div class="logout">
+            <form method="post" action="{% url 'logout' %}"> <!-- Formulario de logout -->
+                {% csrf_token %} <!-- Token CSRF para seguridad -->
+                <button type="submit">Log Out</button> <!-- Botón de cierre de sesión -->
             </form> <!-- Fin del formulario de logout -->
         </div> <!-- Fin de la sección de logout -->
     </div> <!-- Fin del contenedor principal -->
