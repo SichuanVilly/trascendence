@@ -25,41 +25,37 @@ class PongConsumer(AsyncWebsocketConsumer):
         )
         await self.accept()
 
-        # Obtener conexión Redis y roles de la sala
+        # Obtener conexión Redis
         redis = await get_redis_connection()
-        roles = await redis.hgetall(f"{self.room_group_name}_roles")
-        
+
+        # Comprobar si la sala ya existe en Redis, si no, inicializar y comenzar el bucle
+        if not await redis.exists(f"{self.room_group_name}_state"):
+            await self.initialize_game_state()
+            asyncio.create_task(self.start_game_loop())
+
         # Asignar roles a los jugadores
+        roles = await redis.hgetall(f"{self.room_group_name}_roles")
         if 'player1' not in roles:
             self.player_role = 'player1'
-            await redis.hset(f"{self.room_group_name}_roles", 'player1', self.channel_name)
-            print("Assigned role player1")
+            await redis.hset(f"{self.room_group_name}_roles", 'player1', self.username)
         elif 'player2' not in roles:
             self.player_role = 'player2'
-            await redis.hset(f"{self.room_group_name}_roles", 'player2', self.channel_name)
-            print("Assigned role player2")
+            await redis.hset(f"{self.room_group_name}_roles", 'player2', self.username)
         else:
             await self.close()
             return
 
-        # Informar al cliente del rol y nombre del usuario
+        # Enviar el estado actual del juego al jugador conectado
+        game_state = await redis.hgetall(f"{self.room_group_name}_state")
+        game_state = {k: int(v) for k, v in game_state.items()}
         await self.send(text_data=json.dumps({
             'type': 'player_info',
             'player': self.player_role,
-            'username': self.username  # Enviar el nombre de usuario al cliente
+            'player1Name': roles.get('player1', 'Esperando...'),
+            'player2Name': roles.get('player2', 'Esperando...'),
+            'playerCount': len(roles),
+            **game_state
         }))
-
-        # Verificar si ambos jugadores están listos para iniciar el juego
-        roles = await redis.hgetall(f"{self.room_group_name}_roles")
-        if 'player1' in roles and 'player2' in roles:
-            # Solo el jugador que inicia el juego envía la señal
-            if self.player_role == 'player1':
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'start_game'
-                    }
-                )
 
     async def disconnect(self, close_code):
         if self.player_role:
@@ -112,10 +108,10 @@ class PongConsumer(AsyncWebsocketConsumer):
             'ballY': game_state['ballY']
         }))
 
-    async def start_game(self, event):  # Se agrega el parámetro 'event'
+    async def start_game_loop(self):
         print("Starting game loop...")
+        redis = await get_redis_connection()
         while True:
-            redis = await get_redis_connection()
             game_state = await redis.hgetall(f"{self.room_group_name}_state")
             game_state = {k: int(v) for k, v in game_state.items()}
             game_state = self.initialize_game_state_if_missing(game_state)
@@ -132,6 +128,15 @@ class PongConsumer(AsyncWebsocketConsumer):
                 }
             )
             await asyncio.sleep(0.03)
+
+    async def initialize_game_state(self):
+        redis = await get_redis_connection()
+        default_state = {
+            'player1Y': 150, 'player2Y': 150, 'ballX': 400, 'ballY': 200,
+            'ballSpeedX': 5, 'ballSpeedY': 5, 'paddleHeight': 100, 'paddleWidth': 10,
+            'canvasWidth': 800, 'canvasHeight': 400
+        }
+        await redis.hset(f"{self.room_group_name}_state", mapping=default_state)
 
     def initialize_game_state_if_missing(self, game_state):
         default_state = {

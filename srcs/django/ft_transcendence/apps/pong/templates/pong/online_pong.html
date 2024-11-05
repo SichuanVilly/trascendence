@@ -75,7 +75,6 @@
         const player1NameElement = document.getElementById('player1Name');
         const player2NameElement = document.getElementById('player2Name');
 
-        let playerCount = 1;
         let playerRole = null;
         let player1Y = 150;
         let player2Y = 150;
@@ -106,17 +105,11 @@
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
 
-            if (data.type === 'waiting') {
-                waitingMessage.style.display = 'block';
-            } else if (data.type === 'player_info') {
+            if (data.type === 'player_info') {
                 playerRole = data.player;
-                console.log("Rol asignado:", playerRole);
-
-                if (playerRole === 'player1') {
-                    player1NameElement.textContent = `Jugador 1: ${data.username}`;
-                } else if (playerRole === 'player2') {
-                    player2NameElement.textContent = `Jugador 2: ${data.username}`;
-                }
+                player1NameElement.textContent = `Jugador 1: ${data.player1Name}`;
+                player2NameElement.textContent = `Jugador 2: ${data.player2Name}`;
+                playerCountElement.textContent = data.playerCount;
             } else {
                 waitingMessage.style.display = 'none';
 
@@ -126,11 +119,6 @@
                 if (data.ballY !== undefined) ballY = data.ballY;
 
                 draw();
-            }
-
-            if (data.playerCount !== undefined) {
-                playerCount = data.playerCount;
-                playerCountElement.innerText = playerCount;
             }
         };
 
