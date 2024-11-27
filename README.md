@@ -124,3 +124,6 @@ sudo fuser -k 6379/tcp
 # Limpieza completa terminada
 echo "Limpieza completa terminada."
 
+# Problem with docker mount solve with this commands
+mount --bind / /
+mount --make-rshared /
