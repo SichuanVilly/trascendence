@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego Pong Online</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background-color: #1d1f21;
+            color: #ffffff;
+        }
+
+        h1 {
+            margin-top: 20px;
+            color: #00e676;
+        }
+
+        #game-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        #pongCanvas {
+            background-color: #000;
+            border: 2px solid #00e676;
+        }
+
+        #status-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 800px;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #333;
+            border-radius: 5px;
+        }
+
+        .player-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Juego Pong Online</h1>
+    <div id="game-area">
+        <canvas id="pongCanvas" width="800" height="400"></canvas>
+        <div id="status-bar">
+            <div class="player-info">
+                <span id="player1Name">Jugador 1: Esperando...</span>
+            </div>
+            <span>Jugadores Conectados: <span id="playerCount">1</span></span>
+            <div class="player-info">
+                <span id="player2Name">Jugador 2: Esperando...</span>
+            </div>
+        </div>
+        <div id="waitingMessage" style="display: none; margin-top: 10px;">Esperando a otro jugador...</div>
+    </div>
+
+    <script>
+        const roomName = "{{ room_name }}";
+        const socket = new WebSocket(`ws://${window.location.host}/ws/pong/online_pong/${roomName}/`);
+
+        const canvas = document.getElementById('pongCanvas');
+        const ctx = canvas.getContext('2d');
+        const playerCountElement = document.getElementById('playerCount');
+        const waitingMessage = document.getElementById('waitingMessage');
+        const player1NameElement = document.getElementById('player1Name');
+        const player2NameElement = document.getElementById('player2Name');
+
+        let playerRole = null;
+        let player1Y = 150;
+        let player2Y = 150;
+        let ballX = 400;
+        let ballY = 200;
+        const paddleWidth = 10;
+        const paddleHeight = 100;
+        const ballRadius = 10;
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, player1Y, paddleWidth, paddleHeight);
+            ctx.fillRect(canvas.width - paddleWidth, player2Y, paddleWidth, paddleHeight);
+
+            ctx.beginPath();
+            ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        socket.onopen = function() {
+            console.log('Conexión WebSocket abierta');
+        };
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'player_info') {
+                playerRole = data.player;
+                player1NameElement.textContent = `Jugador 1: ${data.player1Name}`;
+                player2NameElement.textContent = `Jugador 2: ${data.player2Name}`;
+                playerCountElement.textContent = data.playerCount;
+            } else {
+                waitingMessage.style.display = 'none';
+
+                if (data.player1Y !== undefined) player1Y = data.player1Y;
+                if (data.player2Y !== undefined) player2Y = data.player2Y;
+                if (data.ballX !== undefined) ballX = data.ballX;
+                if (data.ballY !== undefined) ballY = data.ballY;
+
+                draw();
+            }
+        };
+
+        socket.onclose = function() {
+            console.log('Conexión cerrada');
+        };
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowUp') {
+                sendMovement('up');
+            } else if (event.key === 'ArrowDown') {
+                sendMovement('down');
+            }
+        });
+
+        function sendMovement(direction) {
+            socket.send(JSON.stringify({ 'direction': direction }));
+        }
+
+        draw();
+    </script>
+</body>
+</html>

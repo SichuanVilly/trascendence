@@ -1,0 +1,13 @@
+.form-container {
+    text-align: center;
+    padding: 20px;
+    background-color: #222;
+    border-radius: 10px;
+  }
+  input {
+    width: 100%;
+    border: 1px solid #555;
+    border-radius: 5px;
+    font-size: 1em;
+  }
+  

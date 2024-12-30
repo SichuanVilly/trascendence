@@ -1,0 +1,123 @@
+services:
+
+  django:
+    container_name: django
+    build:
+      context: ./django
+    ports:
+      - "8000:8000"
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    environment:
+      DJANGO_ADMIN_PASSWORD_FILE: ${DJANGO_ADMIN_PASSWORD_FILE}
+      DJANGO_ADMIN_USER_FILE: ${DJANGO_ADMIN_USER_FILE}
+      DJANGO_ADMIN_EMAIL_FILE: ${DJANGO_ADMIN_EMAIL_FILE}
+      PYTHONUNBUFFERED: ${PYTHONUNBUFFERED}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE}
+      POSTGRES_USER_FILE: ${POSTGRES_USER_FILE}
+      POSTGRES_DB_FILE: ${POSTGRES_DB_FILE}
+    secrets:
+      - source: django_admin_password
+        mode: "0400"
+      - source: django_admin_user
+        mode: "0400"
+      - source: django_admin_email
+        mode: "0400"
+      - source: postgres_password
+        mode: "0400"
+      - source: postgres_user
+        mode: "0400"
+      - source: postgres_db
+        mode: "0400"
+    volumes:
+      #- django:/django/ft_transcendence
+      - ./django/ft_transcendence:/django/ft_transcendence
+    networks:
+      - django-postgres
+    restart: unless-stopped
+
+  migration:
+    container_name: migration
+    build:
+      context: ./django
+    entrypoint: "/django/migration_entrypoint.sh"
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE}
+      POSTGRES_USER_FILE: ${POSTGRES_USER_FILE}
+      POSTGRES_DB_FILE: ${POSTGRES_DB_FILE}
+    secrets:
+      - source: postgres_password
+        mode: "0400"
+      - source: postgres_user
+        mode: "0400"
+      - source: postgres_db
+        mode: "0400"
+    volumes:
+      #- django:/django/ft_transcendence
+      - ./django/ft_transcendence:/django/ft_transcendence
+    networks:
+      - django-postgres
+
+  postgres:
+    container_name: postgres
+    image: postgres:16.4
+    environment:
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE}
+      POSTGRES_USER_FILE: ${POSTGRES_USER_FILE}
+      POSTGRES_DB_FILE: ${POSTGRES_DB_FILE}
+      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS}
+    secrets:
+      - source: postgres_password
+        mode: "0400"
+      - source: postgres_user
+        mode: "0400"
+      - source: postgres_db
+        mode: "0400"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    networks:
+      - django-postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 600s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    networks:
+      - django-postgres
+    ports:
+      - "6380:6379"
+    restart: always
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+
+secrets:
+  django_admin_password:
+    file: secrets/django_admin_password
+  django_admin_user:
+    file: secrets/django_admin_user
+  django_admin_email:
+    file: secrets/django_admin_email
+  postgres_password:
+    file: secrets/postgres_password
+  postgres_user:
+    file: secrets/postgres_user
+  postgres_db:
+    file: secrets/postgres_db
+
+volumes:
+  django:
+  postgres:
+
+networks:
+  django-postgres:
