@@ -1,0 +1,68 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: transcendence_backend
+    entrypoint: ["/app/entrypoint.sh"]  #Ejecuta el script de inicialización
+    environment:
+      DJANGO_SETTINGS_MODULE: "backend.settings"
+      ALLOWED_HOSTS: '*'
+      DATABASE_URL: postgres://postgres:postgres@transcendence_db:5432/transcendence_db
+      DEBUG: "1"
+      SECRET_KEY: mysecretkey
+      REDIS_URL: redis://transcendence_redis:6379/0  #Asegura la conexión a Redis
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: transcendence_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      REACT_APP_BACKEND_URL: "http://localhost:8000"
+    depends_on:
+      - backend
+    restart: always
+
+  db:
+    image: postgres:15
+    container_name: transcendence_db
+    environment:
+      POSTGRES_DB: transcendence_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:alpine
+    container_name: transcendence_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:

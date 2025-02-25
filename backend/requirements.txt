@@ -1,0 +1,11 @@
+django
+djangorestframework
+django-cors-headers
+daphne
+channels
+channels-redis
+psycopg2-binary
+gunicorn
+Pillow
+djangorestframework-simplejwt
+users
