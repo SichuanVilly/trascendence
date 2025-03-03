@@ -4,14 +4,14 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: transcendence_backend
-    entrypoint: ["/app/entrypoint.sh"]  #Ejecuta el script de inicialización
+    entrypoint: ["/app/entrypoint.sh"]  # Ejecuta el script de inicialización
     environment:
       DJANGO_SETTINGS_MODULE: "backend.settings"
       ALLOWED_HOSTS: '*'
       DATABASE_URL: postgres://postgres:postgres@transcendence_db:5432/transcendence_db
       DEBUG: "1"
       SECRET_KEY: mysecretkey
-      REDIS_URL: redis://transcendence_redis:6379/0  #Asegura la conexión a Redis
+      REDIS_URL: redis://transcendence_redis:6379/0  # Asegura la conexión a Redis
     depends_on:
       db:
         condition: service_healthy
@@ -26,15 +26,12 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile  # Dockerfile basado en Nginx para archivos estáticos
     container_name: transcendence_frontend
     ports:
-      - "3000:3000"
+      - "3000:80"  # Mapea el puerto 80 del contenedor al 3000 del host
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      REACT_APP_BACKEND_URL: "http://localhost:8000"
+      - ./frontend:/usr/share/nginx/html  # Monta la carpeta de archivos estáticos en Nginx
     depends_on:
       - backend
     restart: always

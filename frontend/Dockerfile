@@ -1,20 +1,14 @@
-# Usa una imagen base de Node.js
-FROM node:18
+# Usa una imagen base de Nginx para servir contenido estático
+FROM nginx:alpine
 
-# Establece el directorio de trabajo dentro del contenedor
-WORKDIR /app
+# Elimina el contenido por defecto de Nginx
+RUN rm -rf /usr/share/nginx/html/*
 
-# Copia package.json y package-lock.json antes de instalar las dependencias
-COPY package*.json ./
+# Copia todos los archivos de tu frontend a la carpeta de Nginx
+COPY . /usr/share/nginx/html
 
-# Instala las dependencias
-RUN npm install
+# Expone el puerto 80, ya que Nginx escucha en ese puerto
+EXPOSE 80
 
-# Copia el resto del código del frontend
-COPY . .
-
-# Expone el puerto 3000
-EXPOSE 3000
-
-# Comando por defecto para iniciar el frontend
-CMD ["npm", "start"]
+# Comando por defecto para iniciar Nginx en primer plano
+CMD ["nginx", "-g", "daemon off;"]
