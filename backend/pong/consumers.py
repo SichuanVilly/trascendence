@@ -17,13 +17,18 @@ class PongGameConsumer(AsyncWebsocketConsumer):
         self.user = self.scope["user"]
         self.game_loop_running = False  # Bandera para controlar el bucle del juego
 
-        # Inicializamos las posiciones de las palas en el centro (sin gravedad)
+        # Inicializa las posiciones de las palas en el centro (sin gravedad)
         self.paddle1_pos = 50  # Pala izquierda
         self.paddle2_pos = 50  # Pala derecha
 
-        # Inicializamos atributos para guardar los nombres de los jugadores
+        # Inicializa atributos para guardar los nombres de los jugadores
         self.player1_name = None
         self.player2_name = None
+
+        # Inicializa las puntuaciones y el puntaje ganador (10 puntos)
+        self.score1 = 0
+        self.score2 = 0
+        self.winningScore = 10
 
         # Si el usuario no está autenticado, cierra la conexión
         if not self.user.is_authenticated:
@@ -33,7 +38,7 @@ class PongGameConsumer(AsyncWebsocketConsumer):
         try:
             # Obtiene o crea la sala de forma asíncrona
             self.room, created = await self.get_or_create_room(self.room_id)
-            # Agrega al usuario a la sala (el método add_player actualiza el modelo y lo guarda)
+            # Agrega al usuario a la sala
             await self.add_player_to_room(self.room, self.user)
             
             # Añade el canal al grupo y acepta la conexión
@@ -67,9 +72,12 @@ class PongGameConsumer(AsyncWebsocketConsumer):
             if data["type"] == "move_paddle":
                 await self.update_paddle_position(data)
             elif data["type"] == "start_game":
-                # Solo el jugador anfitrión (player1) inicia el bucle del juego
+                # Solo el jugador anfitrión (player1) inicia el juego
                 if self.room.player1 and self.room.player1.username == self.user.username:
                     if not self.game_loop_running:
+                        # Reinicia las puntuaciones al iniciar el juego
+                        self.score1 = 0
+                        self.score2 = 0
                         self.game_loop_running = True
                         asyncio.create_task(self.run_game_loop())
             elif data["type"] == "game_update":
@@ -95,7 +103,6 @@ class PongGameConsumer(AsyncWebsocketConsumer):
         new_position = max(0, min(100, int(data.get("position", 50)) + direction))
         logging.debug(f"Movimiento de {username}: {paddle_key} a posición {new_position}")
 
-        # Actualiza la posición de la pala en el servidor (sin aplicar gravedad)
         if paddle_key == "paddle_1":
             self.paddle1_pos = new_position
         else:
@@ -107,12 +114,10 @@ class PongGameConsumer(AsyncWebsocketConsumer):
         )
 
     async def update_paddle(self, event):
-        # Actualiza el estado interno en todos los consumidores (incluido el host)
         if event["paddle_key"] == "paddle_1":
             self.paddle1_pos = event["position"]
         else:
             self.paddle2_pos = event["position"]
-        # Envía el mensaje a la conexión del cliente
         await self.send(text_data=json.dumps({
             "type": "update_paddle",
             "paddle": event["paddle_key"],
@@ -123,9 +128,7 @@ class PongGameConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event["data"]))
 
     async def send_room_update(self):
-        # Obtiene los nombres de los jugadores desde la base de datos
         players = await self.get_room_players()
-        # Actualiza los atributos de instancia para guardar los nombres
         self.player1_name = players.get("player1")
         self.player2_name = players.get("player2")
         await self.channel_layer.group_send(
@@ -140,51 +143,128 @@ class PongGameConsumer(AsyncWebsocketConsumer):
         }))
 
     async def run_game_loop(self):
-        # Inicializa la posición y velocidad de la bola (en porcentaje)
+        # Variables iniciales de la bola en porcentaje
         ball_x = 50.0
         ball_y = 50.0
-        velocity_x = 1.0  # Velocidad horizontal (por iteración)
-        velocity_y = 1.0  # Velocidad vertical
-
-        # Parámetros para la detección de colisiones
-        ball_radius = 2
-        left_paddle_x = 5    # Posición fija de la pala izquierda
-        right_paddle_x = 95  # Posición fija de la pala derecha
-        paddle_half_height = 10  # Mitad de la altura de la pala (altura total = 20)
+        velocity_x = 1.0
+        velocity_y = 1.0
+        ball_radius_percent = (10 / 800) * 100  # Aproximadamente 1.25%
+        left_paddle_x = 5    # Porcentaje fijo para la pala izquierda
+        right_paddle_x = 95  # Porcentaje fijo para la pala derecha
+        paddle_half_height = 10  # Mitad de la altura de la pala
 
         logging.debug("🏁 Iniciando bucle del juego")
         while self.game_loop_running:
             ball_x += velocity_x
             ball_y += velocity_y
 
-            # Rebote vertical: si la pelota toca la parte superior o inferior
+            # Rebote vertical: invierte la dirección si toca el borde superior o inferior
             if ball_y <= 0 or ball_y >= 100:
                 velocity_y = -velocity_y
                 ball_y = max(0, min(ball_y, 100))
 
             # Colisión con la pala izquierda
-            if ball_x - ball_radius <= left_paddle_x:
+            if ball_x - ball_radius_percent <= left_paddle_x:
                 if self.paddle1_pos - paddle_half_height <= ball_y <= self.paddle1_pos + paddle_half_height:
-                    velocity_x = abs(velocity_x)  # Rebota hacia la derecha
-                    ball_x = left_paddle_x + ball_radius  # Ajusta para evitar múltiples colisiones
+                    velocity_x = abs(velocity_x)
+                    ball_x = left_paddle_x + ball_radius_percent
+                else:
+                    # Punto para player2
+                    self.score2 += 1
+                    if self.score2 >= self.winningScore:
+                        # Actualiza los nombres de los jugadores justo antes del game_over
+                        players = await self.get_room_players()
+                        self.player1_name = players.get("player1")
+                        self.player2_name = players.get("player2")
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {"type": "game_update", "data": {
+                                "type": "game_over",
+                                "score1": self.score1,
+                                "score2": self.score2,
+                                "winner": self.player2_name
+                            }}
+                        )
+                        self.game_loop_running = False
+                        break
+                    # Deja que la pelota continúe hasta salir del campo
+                    while ball_x + ball_radius_percent > 0:
+                        ball_x += velocity_x
+                        ball_y += velocity_y
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {"type": "game_update", "data": {
+                                "type": "game_update",
+                                "ball_x": ball_x,
+                                "ball_y": ball_y,
+                                "score1": self.score1,
+                                "score2": self.score2
+                            }}
+                        )
+                        await asyncio.sleep(0.016)
+                    await asyncio.sleep(1)
+                    ball_x = 50.0
+                    ball_y = 50.0
+                    velocity_x = 1.0
+                    velocity_y = 1.0
 
             # Colisión con la pala derecha
-            if ball_x + ball_radius >= right_paddle_x:
+            if ball_x + ball_radius_percent >= right_paddle_x:
                 if self.paddle2_pos - paddle_half_height <= ball_y <= self.paddle2_pos + paddle_half_height:
-                    velocity_x = -abs(velocity_x)  # Rebota hacia la izquierda
-                    ball_x = right_paddle_x - ball_radius
+                    velocity_x = -abs(velocity_x)
+                    ball_x = right_paddle_x - ball_radius_percent
+                else:
+                    # Punto para player1
+                    self.score1 += 1
+                    if self.score1 >= self.winningScore:
+                        players = await self.get_room_players()
+                        self.player1_name = players.get("player1")
+                        self.player2_name = players.get("player2")
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {"type": "game_update", "data": {
+                                "type": "game_over",
+                                "score1": self.score1,
+                                "score2": self.score2,
+                                "winner": self.player1_name
+                            }}
+                        )
+                        self.game_loop_running = False
+                        break
+                    while ball_x - ball_radius_percent < 100:
+                        ball_x += velocity_x
+                        ball_y += velocity_y
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {"type": "game_update", "data": {
+                                "type": "game_update",
+                                "ball_x": ball_x,
+                                "ball_y": ball_y,
+                                "score1": self.score1,
+                                "score2": self.score2
+                            }}
+                        )
+                        await asyncio.sleep(0.016)
+                    await asyncio.sleep(1)
+                    ball_x = 50.0
+                    ball_y = 50.0
+                    velocity_x = -1.0
+                    velocity_y = 1.0
 
-            # Rebote lateral (por si la pelota se sale de la pantalla)
+            # Rebote lateral para casos imprevistos
             if ball_x <= 0 or ball_x >= 100:
                 velocity_x = -velocity_x
                 ball_x = max(0, min(ball_x, 100))
 
+            # Envía la actualización del juego (posición de la bola y puntuación)
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {"type": "game_update", "data": {
                     "type": "game_update",
                     "ball_x": ball_x,
-                    "ball_y": ball_y
+                    "ball_y": ball_y,
+                    "score1": self.score1,
+                    "score2": self.score2
                 }}
             )
             await asyncio.sleep(0.016)

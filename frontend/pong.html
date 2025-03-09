@@ -13,7 +13,7 @@
       background: #000;
       color: #fff;
     }
-    /* Contenedor general con ancho fijo para alinear canvas y nombres */
+    /* Contenedor general con ancho fijo para alinear canvas, nombres y puntuación */
     #gameWrapper {
       width: 800px;
       margin: 0 auto;
@@ -34,6 +34,15 @@
       height: 400px;
       background: #222;
       border: 2px solid #fff;
+    }
+    /* Contenedor para el scoreboard debajo del canvas */
+    #scoreBoard {
+      display: flex;
+      justify-content: space-between;
+      font-size: 32px;
+      font-weight: bold;
+      color: #fff;
+      margin-top: 10px;
     }
     /* Estilo para el countdown */
     #countdown {
@@ -56,6 +65,11 @@
       </div>
       <!-- Canvas donde se dibuja el juego -->
       <canvas id="gameCanvas" width="800" height="400"></canvas>
+      <!-- Contenedor para el scoreboard -->
+      <div id="scoreBoard">
+        <div id="leftScore">0</div>
+        <div id="rightScore">0</div>
+      </div>
     </div>
     <!-- Elementos para mostrar el countdown y el estado del juego -->
     <p id="countdown"></p>

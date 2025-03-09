@@ -17,7 +17,7 @@ if (!roomId) {
 const token = localStorage.getItem('token');
 const currentUser = localStorage.getItem('username');
 if (!token || !currentUser) {
-  window.location.href = 'index.html';
+  window.location.href = 'home.html';
 }
 
 // Variables globales para el juego
@@ -30,6 +30,9 @@ let ballPos = { x: 50, y: 50 }; // posición de la bola (en porcentaje)
 let myPaddle = null;
 // Objeto para almacenar los nombres de los jugadores, que llegan en room_update
 let players = { player1: null, player2: null };
+
+// Variable para indicar que el juego terminó (para deshabilitar nuevos movimientos)
+let gameOver = false;
 
 // Crea la URL del WebSocket para el juego Pong
 const wsUrl = `ws://localhost:8000/ws/pong/${roomId}/?token=${token}`;
@@ -44,6 +47,12 @@ socket.onmessage = (event) => {
   try {
     const data = JSON.parse(event.data);
     console.log("Mensaje recibido:", data);
+
+    if (data.type === "game_over") {
+      gameOver = true;
+      displayGameOver(data);
+      return; // Detenemos el procesamiento de otros mensajes
+    }
 
     if (data.type === "room_update") {
       // Actualizamos los nombres de los jugadores
@@ -64,10 +73,13 @@ socket.onmessage = (event) => {
         paddle2Pos = data.position;
       }
     } else if (data.type === "game_update") {
-      // Actualiza la posición de la bola con los valores enviados por el servidor
+      // Actualiza la posición de la bola y la puntuación con los valores enviados por el servidor
       if (data.ball_x !== undefined && data.ball_y !== undefined) {
         ballPos.x = data.ball_x;
         ballPos.y = data.ball_y;
+      }
+      if (data.score1 !== undefined && data.score2 !== undefined) {
+        updateScore(data.score1, data.score2);
       }
     }
   } catch (e) {
@@ -102,7 +114,15 @@ function updatePlayerNames() {
   rightNameDiv.textContent = players.player2 ? players.player2 : "Jugador 2";
 }
 
-// Dibuja el juego en el canvas (sin dibujar los nombres)
+// Función para actualizar la puntuación en pantalla (debajo del área de juego)
+function updateScore(score1, score2) {
+  const leftScoreDiv = document.getElementById("leftScore");
+  const rightScoreDiv = document.getElementById("rightScore");
+  leftScoreDiv.textContent = score1;
+  rightScoreDiv.textContent = score2;
+}
+
+// Dibuja el juego en el canvas (sin dibujar nombres ni puntuación)
 function drawGame() {
   // Limpia el canvas
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -133,13 +153,16 @@ function drawGame() {
 
 // Bucle de animación: se dibuja la posición enviada por el servidor, sin interpolar
 function gameLoop() {
-  drawGame();
-  requestAnimationFrame(gameLoop);
+  if (!gameOver) { // Solo se dibuja si el juego no ha terminado
+    drawGame();
+    requestAnimationFrame(gameLoop);
+  }
 }
 gameLoop();
 
-// Manejar eventos de teclado para mover la pala
+// Manejar eventos de teclado para mover la pala (deshabilitados si el juego terminó)
 document.addEventListener('keydown', (e) => {
+  if (gameOver) return;
   let direction = 0;
   if (e.key === "ArrowUp") {
     direction = -5;
@@ -181,3 +204,51 @@ function startCountdown() {
   }, 1000);
 }
 startCountdown();
+
+// Función para mostrar el pop up de Game Over
+function displayGameOver(gameData) {
+  // gameData debe incluir: score1, score2 y winner
+  const modalOverlay = document.createElement("div");
+  modalOverlay.style.position = "fixed";
+  modalOverlay.style.top = 0;
+  modalOverlay.style.left = 0;
+  modalOverlay.style.width = "100%";
+  modalOverlay.style.height = "100%";
+  modalOverlay.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+  modalOverlay.style.display = "flex";
+  modalOverlay.style.flexDirection = "column";
+  modalOverlay.style.justifyContent = "center";
+  modalOverlay.style.alignItems = "center";
+  modalOverlay.style.zIndex = 1000;
+
+  // Mensaje según si el usuario ganó o perdió
+  const resultMessage = document.createElement("h2");
+  if (currentUser === gameData.winner) {
+    resultMessage.textContent = "¡Has ganado!";
+  } else {
+    resultMessage.textContent = "Has perdido";
+  }
+  resultMessage.style.color = "#fff";
+
+  // Muestra el nombre del ganador y la puntuación final
+  const infoMessage = document.createElement("p");
+  infoMessage.textContent = `Ganador: ${gameData.winner} | ${gameData.score1} - ${gameData.score2}`;
+  infoMessage.style.color = "#fff";
+  infoMessage.style.fontSize = "24px";
+
+  // Botón para volver al home
+  const homeButton = document.createElement("button");
+  homeButton.textContent = "Volver al Home";
+  homeButton.style.padding = "10px 20px";
+  homeButton.style.fontSize = "18px";
+  homeButton.style.marginTop = "20px";
+  homeButton.onclick = () => {
+    window.location.href = "index.html";
+  };
+
+  modalOverlay.appendChild(resultMessage);
+  modalOverlay.appendChild(infoMessage);
+  modalOverlay.appendChild(homeButton);
+
+  document.body.appendChild(modalOverlay);
+}
