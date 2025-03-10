@@ -2,32 +2,107 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <title>Mi SPA Pong</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Mi App</title>
-  <!-- Usando CDN de Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Bootstrap (CDN). Puedes descargarlo si prefieres local -->
+  <link 
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+    rel="stylesheet"
+  >
+  <style>
+    /* Opcional: estilos para la vista Pong dentro de la SPA */
+    /* Ocultamos bordes o ajustamos layout según tus gustos */
+    #gameCanvas {
+      display: block;
+      width: 800px; 
+      height: 400px;
+      background: #222;
+      border: 2px solid #fff;
+      margin: 0 auto;
+    }
+  </style>
 </head>
 <body class="bg-light">
-  <div class="container d-flex justify-content-center align-items-center vh-100">
-    <div class="card p-4 shadow">
-      <h3 class="card-title text-center mb-3">Iniciar sesión</h3>
-      <form id="loginForm">
-        <div class="mb-3">
-          <label for="username" class="form-label">Usuario</label>
-          <input type="text" class="form-control" id="username" required>
+  <!-- Barra de navegación -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#home">Mi Pong SPA</a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <!-- Se ocultan/mostrarán dinámicamente con JavaScript -->
+          <li class="nav-item">
+            <a class="nav-link" href="#login" id="navLoginLink">Login</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#register" id="navRegisterLink">Register</a>
+          </li>
+          <li class="nav-item d-none">
+            <a class="nav-link" href="#home" id="navHomeLink">Home</a>
+          </li>
+          <li class="nav-item d-none">
+            <a class="nav-link" href="#logout" id="navLogoutLink">Logout</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Contenedor general donde inyectaremos todas las vistas -->
+  <div class="container py-4" id="app">
+    <!-- Aquí irán #login, #register, #home, #pong, etc. de forma dinámica -->
+  </div>
+
+  <!-- MODALS para invitaciones (vista #home) -->
+  <!-- Modal para invitar a jugar -->
+  <div class="modal fade" id="inviteModal" tabindex="-1" aria-labelledby="inviteModalTitle" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="inviteModalTitle">Invitar a jugar</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
-        <div class="mb-3">
-          <label for="password" class="form-label">Contraseña</label>
-          <input type="password" class="form-control" id="password" required>
+        <div class="modal-body" id="inviteModalBody">
+          <!-- Se llenará con JS -->
         </div>
-        <button type="submit" class="btn btn-primary w-100">Ingresar</button>
-      </form>
-      <p class="text-center mt-3">¿No tienes cuenta? <a href="register.html">Regístrate</a></p>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="btnInviteConfirm">Invitar</button>
+          <button type="button" class="btn btn-secondary" id="btnInviteCancel" data-bs-dismiss="modal">Cancelar</button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Bootstrap Bundle JS (incluye Popper) -->
+  <!-- Modal para respuesta de invitación recibida -->
+  <div class="modal fade" id="inviteResponseModal" tabindex="-1" aria-labelledby="inviteResponseModalTitle" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="inviteResponseModalTitle">Invitación recibida</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="inviteResponseModalBody">
+          <!-- Se llenará con JS -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="btnAcceptInvite">Aceptar</button>
+          <button type="button" class="btn btn-danger" id="btnRejectInvite">Rechazar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap Bundle JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/login.js"></script>
+  <!-- Script principal que contiene TODO: router, login, register, home e incluso Pong -->
+  <script src="static/js/main.js"></script>
 </body>
 </html>
