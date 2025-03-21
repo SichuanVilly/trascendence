@@ -1044,18 +1044,36 @@ function startCountdown(roomId) {
 /****************************************************
  * 6) DISPLAY GAME OVER
  ****************************************************/
+// Función auxiliar para actualizar las estadísticas del usuario actual
+
+
 function displayGameOver(gameData) {
   console.log("==> GAME OVER DATA:", gameData);
-
   gameOver = true;
   document.removeEventListener("keydown", onPongKeyDown);
 
-  let winner = gameData.winner || "Desconocido";
-  let resultMessage = "Has perdido";
-  if (getUsername() === winner) {
-    resultMessage = "¡Has ganado!";
+  // Determinar el ganador usando la variable global "players"
+  let winner = "Desconocido";
+  if (players.player1 && players.player2) {
+    if (gameData.score1 > gameData.score2) {
+      winner = players.player1;
+    } else if (gameData.score2 > gameData.score1) {
+      winner = players.player2;
+    }
   }
 
+  // Actualizar las estadísticas del usuario: si el usuario es ganador, suma 1 en wins;
+  // de lo contrario, suma 1 en losses.
+  if (getUsername() === winner) {
+    updateMyStats("win");
+  } else {
+    updateMyStats("loss");
+  }
+
+  // Determinar el mensaje a mostrar
+  let resultMessage = (getUsername() === winner) ? "¡Has ganado!" : "Has perdido";
+
+  // Crear el overlay de game over
   const overlay = document.createElement("div");
   overlay.style.position = "fixed";
   overlay.style.top = "0";
@@ -1086,11 +1104,36 @@ function displayGameOver(gameData) {
   btn.onclick = () => {
     document.body.removeChild(overlay);
     window.location.hash = "#home";
+    // Opcional: aquí podrías llamar a updateMyStats() o alguna función para refrescar el DOM,
+    // pero en este caso ya se actualizó la estadística con updateMyStats()
   };
   overlay.appendChild(btn);
 
   document.body.appendChild(overlay);
 }
+
+
+function updateMyStats(statType) {
+  const token = getToken();
+  fetch(`${API_BASE_URL}/api/users/update_my_stat/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify({ stat: statType })  // "win" o "loss"
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log("✅ Stats actualizadas:", data);
+    })
+    .catch(err => {
+      console.error("❌ Error actualizando stats:", err);
+    });
+}
+
+
+
 
 /****************************************************
  * WS Y FUNCIONES PARA CHAT, INVITACIONES, etc.
@@ -1249,43 +1292,3 @@ function hideInvitationModal() {
   window.inviteFromUser = null;
 }
 
-/****************************************************
- * 7) DISPLAY GAME OVER
- ****************************************************/
-function displayGameOver(gameData) {
-  console.log("==> GAME OVER DATA:", gameData);
-  gameOver = true;
-  document.removeEventListener("keydown", onPongKeyDown);
-  let winner = gameData.winner || "Desconocido";
-  let resultMessage = (getUsername() === winner) ? "¡Has ganado!" : "Has perdido";
-  const overlay = document.createElement("div");
-  overlay.style.position = "fixed";
-  overlay.style.top = "0";
-  overlay.style.left = "0";
-  overlay.style.width = "100%";
-  overlay.style.height = "100%";
-  overlay.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
-  overlay.style.display = "flex";
-  overlay.style.flexDirection = "column";
-  overlay.style.justifyContent = "center";
-  overlay.style.alignItems = "center";
-  overlay.style.zIndex = 9999;
-  const h2 = document.createElement("h2");
-  h2.style.color = "#fff";
-  h2.textContent = resultMessage;
-  overlay.appendChild(h2);
-  const p = document.createElement("p");
-  p.style.color = "#fff";
-  p.style.fontSize = "24px";
-  p.textContent = `Ganador: ${winner} | ${gameData.score1} - ${gameData.score2}`;
-  overlay.appendChild(p);
-  const btn = document.createElement("button");
-  btn.className = "btn btn-primary mt-3";
-  btn.textContent = "Volver al Home";
-  btn.onclick = () => {
-    document.body.removeChild(overlay);
-    window.location.hash = "#home";
-  };
-  overlay.appendChild(btn);
-  document.body.appendChild(overlay);
-}

@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import RegisterView, LoginView, UserDetailView, OnlineUsersView, UserUpdateView, UserDetailView, UserDeleteView, AddFriendView, RemoveFriendView, BlockFriendView, UnblockFriendView 
+from .views import RegisterView, LoginView, UserDetailView, OnlineUsersView, UserUpdateView, UserDetailView, UserDeleteView, AddFriendView, RemoveFriendView, BlockFriendView, UnblockFriendView, update_my_stat
 from backend.views import pong_room  # Importa la vista de la sala
 
 urlpatterns = [
@@ -13,6 +13,7 @@ urlpatterns = [
     path('remove-friend/', RemoveFriendView.as_view(), name='remove-friend'),
     path('block-friend/', BlockFriendView.as_view(), name='block-friend'),
     path('unblock-friend/', UnblockFriendView.as_view(), name='unblock-friend'),
+    path("update_my_stat/", update_my_stat, name="update_my_stat"),
     #path('online-users/', OnlineUsersView.as_view(), name='online-users'),  # Nueva ruta
 ]
 

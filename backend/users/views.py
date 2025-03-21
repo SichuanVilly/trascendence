@@ -11,6 +11,8 @@ from django.shortcuts import render
 from rest_framework.parsers import MultiPartParser, FormParser
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from rest_framework.decorators import api_view, permission_classes
+
 
 User = get_user_model()
 
@@ -185,3 +187,48 @@ class UnblockFriendView(APIView):
             return Response({"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         request.user.blocked_friends.remove(friend)
         return Response({"message": f"{friend_username} desbloqueado."}, status=status.HTTP_200_OK)
+class UpdateStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        winner_username = request.data.get('winner')
+        loser_username = request.data.get('loser')
+
+        if not winner_username or not loser_username:
+            return Response(
+                {'error': 'Debes proporcionar el nombre del ganador y del perdedor.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            winner = User.objects.get(username=winner_username)
+            loser = User.objects.get(username=loser_username)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'El ganador o el perdedor no existen.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Incrementar estadísticas:
+        winner.wins = (winner.wins or 0) + 1
+        loser.losses = (loser.losses or 0) + 1
+        winner.save()
+        loser.save()
+
+        return Response({'message': 'Estadísticas actualizadas exitosamente.'}, status=status.HTTP_200_OK)
+
+    
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def update_my_stat(request):
+    stat = request.data.get("stat")
+    if stat == "win":
+        request.user.wins = (request.user.wins or 0) + 1
+        request.user.save()
+        return Response({"message": "Victoria sumada."})
+    elif stat == "loss":
+        request.user.losses = (request.user.losses or 0) + 1
+        request.user.save()
+        return Response({"message": "Derrota sumada."})
+    else:
+        return Response({"error": "Tipo de estadística inválido."}, status=400)

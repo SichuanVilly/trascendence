@@ -23,9 +23,6 @@ class PongRoom(models.Model):
         return self.player1 == user or self.player2 == user
 
     def add_player(self, user):
-        if self.player1 == user or self.player2 == user:
-            # El usuario ya está presente
-            return
         if self.player1 is None:
             self.player1 = user
         elif self.player2 is None:
