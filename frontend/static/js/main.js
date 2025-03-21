@@ -156,31 +156,57 @@ window.addEventListener("load", () => {
 });
 window.addEventListener("hashchange", router);
 
+
+function getHashQueryParams() {
+  const hash = window.location.hash.replace("#", "");
+  const queryIndex = hash.indexOf("?");
+  if (queryIndex < 0) return {};
+  const queryString = hash.slice(queryIndex + 1);
+  const urlParams = new URLSearchParams(queryString);
+  const params = {};
+  for (const [key, value] of urlParams.entries()) {
+    params[key] = value;
+  }
+  return params;
+}
+
 function router() {
   const hash = window.location.hash.replace("#", "");
   const token = getToken();
-
+  
   updateNavbarVisibility(!!token);
-  //closeHomeWS();
   closePongWS();
-
-  if (!token && hash !== "login" && hash !== "register") {
-    window.location.hash = "#login";
-    return;
-  }
-
-  if (token && hash !== "login" && hash !== "register") {
+  // No cerramos el WS de usuarios (userSocket) si se mantiene abierto globalmente.
+  
+  if (token && window.location.hash !== "#login" && window.location.hash !== "#register") {
     if (!userSocket || userSocket.readyState !== WebSocket.OPEN) {
       initUsersWebSocket();
     }
   }
-
+  if (!token && hash !== "login" && hash !== "register") {
+    window.location.hash = "#login";
+    return;
+  }
+  
   if (hash.startsWith("pong")) {
     const roomId = getHashQueryParam("room");
     renderPongView(roomId);
     return;
   }
-
+  
+  // Si la ruta es chat y hay un parámetro friend, se muestra el chat privado
+  if (hash.startsWith("chat")) {
+    const params = getHashQueryParams();
+    if (params.friend) {
+      renderPrivateChatView(params.friend);
+      return;
+    } else {
+      // Si no hay parámetro, se muestra la vista general de chat (por ejemplo, la lista de amigos)
+      renderChatView();
+      return;
+    }
+  }
+  
   switch (hash) {
     case "login":
       renderLoginView();
@@ -202,9 +228,6 @@ function router() {
       break;
     case "game-online":
       renderGameOnlineView();
-      break;
-    case "chat":
-      renderChatView();
       break;
     case "tournament":
       renderTournamentView();
@@ -476,6 +499,75 @@ function renderFriendsView() {
       console.error("Error fetching user details:", err);
       alert("Error al obtener datos del usuario.");
     });
+}
+
+function renderPrivateChatView(friendUsername) {
+  const token = getToken();
+  
+  // Construimos el HTML del panel de chat
+  const contentHtml = `
+    <h2>Chat con ${friendUsername}</h2>
+    <div id="chatHistory" style="border:1px solid #ccc; height:400px; overflow-y:scroll; padding:10px; background:#fff;">
+      <!-- Aquí se inyectará el historial de mensajes -->
+    </div>
+    <div style="margin-top:10px;">
+      <input type="text" id="chatMessageInput" class="form-control" placeholder="Escribe tu mensaje">
+      <button id="sendChatMessageBtn" class="btn btn-primary mt-2">Enviar</button>
+    </div>
+  `;
+  
+  // Suponiendo que tu función renderLayout coloca el contenido en el panel derecho
+  renderLayout(contentHtml);
+  
+  // Función para cargar el historial de mensajes
+  function loadChatHistory() {
+    fetch(`http://localhost:8000/api/chat/conversation/?friend=${friendUsername}`, {
+      headers: { "Authorization": "Bearer " + token }
+    })
+      .then(response => response.json())
+      .then(data => {
+        const chatHistoryDiv = document.getElementById("chatHistory");
+        if (data.messages && data.messages.length > 0) {
+          chatHistoryDiv.innerHTML = data.messages.map(msg => {
+            return `<div style="margin-bottom:5px;">
+                      <strong>${msg.sender}:</strong> ${msg.text} 
+                      <span style="font-size:0.8em; color:#666;">${msg.timestamp}</span>
+                    </div>`;
+          }).join("");
+        } else {
+          chatHistoryDiv.innerHTML = "<p>No hay mensajes.</p>";
+        }
+        // Auto-scroll al final
+        chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
+      })
+      .catch(err => console.error("Error loading chat history:", err));
+  }
+  
+  // Cargar el historial al iniciar
+  loadChatHistory();
+  
+  // Evento para enviar un mensaje
+  document.getElementById("sendChatMessageBtn").addEventListener("click", () => {
+    const messageText = document.getElementById("chatMessageInput").value.trim();
+    if (!messageText) return;
+    fetch("http://localhost:8000/api/chat/send/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify({ friend: friendUsername, text: messageText })
+    })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById("chatMessageInput").value = "";
+        loadChatHistory(); // Recargar el historial tras enviar el mensaje
+      })
+      .catch(err => console.error("Error sending message:", err));
+  });
+  
+  // (Opcional) Polling para actualizar el historial en tiempo real cada 1 segundos
+  setInterval(loadChatHistory, 1000);
 }
 
 
@@ -835,8 +927,9 @@ function initUsersWebSocket() {
       console.error("Error en userSocket.onmessage:", err);
     }
   };
-  
-  function pollFriendsList() {
+
+function pollFriendsList() {
+    console.log("Ejecutando pollFriendsList...");
     const token = getToken();
     fetch("http://localhost:8000/api/users/detail/", {
       headers: { "Authorization": "Bearer " + token }
@@ -844,8 +937,6 @@ function initUsersWebSocket() {
       .then(response => response.json())
       .then(data => {
         if (data.friends) {
-          // Puedes utilizar la variable global currentFriendsViewContext
-          // O bien, determinar el contexto basado en el hash actual:
           let context = currentFriendsViewContext;
           if (!context) {
             if (window.location.hash.includes("chat")) {
@@ -862,8 +953,8 @@ function initUsersWebSocket() {
       .catch(err => console.error("Error polling friend list:", err));
   }
   
-  // Llama a pollFriendsList cada 1000 milisegundos (1 segundo)
   setInterval(pollFriendsList, 1000);
+  
   
   
 }

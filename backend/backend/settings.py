@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "pong",
     "users",
+    "chat",
 ]
 
 # Configuración de Channels y Redis
