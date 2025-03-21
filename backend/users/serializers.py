@@ -6,20 +6,27 @@ User = get_user_model()
 
 class FriendSerializer(serializers.ModelSerializer):
     avatar = serializers.ImageField(use_url=True)
-    
+    blocked = serializers.SerializerMethodField()
     class Meta:
         model = User
-        fields = ['username', 'avatar']
-
+        fields = ['username', 'avatar', 'blocked']
+    def get_blocked(self, obj):
+        # 'context' debe incluir el usuario actual
+        current_user = self.context.get("current_user")
+        if current_user:
+            # Retorna True si el amigo está en el conjunto de bloqueados del usuario actual
+            return obj in current_user.blocked_friends.all()
+        return False
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6, required=False)
     avatar = serializers.ImageField(use_url=True, required=False, allow_null=True)
     friends = FriendSerializer(many=True, read_only=True)
+    blocked_friends = FriendSerializer(many=True, read_only=True)  # Lista de usuarios bloqueados
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'password', 'avatar', 'wins', 'losses', 'friends']
+        fields = ['id', 'username', 'password', 'avatar', 'wins', 'losses', 'friends', 'blocked_friends']
         extra_kwargs = {
             'password': {'write_only': True, 'required': False},
             'wins': {'read_only': True},

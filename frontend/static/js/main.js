@@ -10,6 +10,8 @@
 let userSocket = null;  // WebSocket de usuarios online (en #home)
 let pongSocket = null;  // WebSocket de la partida (en #pong)
 let globalOnlineUsers = [];
+let currentFriendsViewContext = "chat"; // "chat" para la vista de chat, "friends" para la pestaña de friends
+let globalBlockedUsers = [];
 
 function getToken() {
   return localStorage.getItem("token");
@@ -242,36 +244,47 @@ function renderHomeView() {
 }
 
 
-// Función que actualiza la lista de amigos en el DOM
-function updateFriendsList(friends) {
+function updateFriendsList(friends, viewContext = "friends") {
   const friendsListContainer = document.getElementById("friendsListContainer");
   if (!friendsListContainer) return;
   let html = "";
   if (friends && friends.length > 0) {
     html = `<ul class="list-group">` +
       friends.map(friend => {
-        // Construir la URL completa del avatar:
+        const isOnline = globalOnlineUsers.includes(friend.username);
+        const statusHTML = `<span style="color: ${isOnline ? 'green' : 'red'}; font-weight: bold; margin-left: 10px;">${isOnline ? 'Online' : 'Offline'}</span>`;
         let avatarPath = friend.avatar ? friend.avatar : 'avatars/default_avatar.png';
-        // Si la ruta comienza con "/media/", la recortamos para poder concatenarla
         if (avatarPath.startsWith('/media/')) {
-          avatarPath = avatarPath.slice(7); // elimina "/media/"
+          avatarPath = avatarPath.slice(7);
         }
-        // Si la ruta no es absoluta, construimos la URL completa (ajusta el host/puerto según corresponda)
         const fullAvatarUrl = avatarPath.startsWith('http')
           ? avatarPath
           : `http://localhost:8000/media/${avatarPath}`;
 
-        // Verificamos si el amigo está conectado
-        const isOnline = globalOnlineUsers.includes(friend.username);
-        const statusHTML = `<span style="color: ${isOnline ? 'green' : 'red'}; font-weight: bold; margin-left: 10px;">${isOnline ? 'Online' : 'Offline'}</span>`;
-        // Mostramos una versión reducida del avatar
-        const avatarHTML = `<img src="${fullAvatarUrl}" alt="Avatar" style="width:30px; height:30px; border-radius:50%; margin-right:10px;">`;
+        let buttonHTML = "";
+        if (viewContext === "friends") {
+          buttonHTML = `<button class="btn btn-sm btn-danger action-friend-btn" data-friend="${friend.username}" data-action="remove">Remove</button>`;
+        } else if (viewContext === "chat") {
+          // Si el amigo está bloqueado, mostrar solo "Unblock"
+          if (globalBlockedUsers.includes(friend.username)) {
+            buttonHTML = `<button class="btn btn-sm btn-secondary action-friend-btn" data-friend="${friend.username}" data-action="unblock">Unblock</button>`;
+          } else {
+            const playButtonHTML = `<button class="btn btn-sm btn-success action-friend-btn" data-friend="${friend.username}" data-action="play">Play</button>`;
+            const chatButtonHTML = `<button class="btn btn-sm btn-primary action-friend-btn" data-friend="${friend.username}" data-action="chat">Chat</button>`;
+            const blockButtonHTML = `<button class="btn btn-sm btn-warning action-friend-btn" data-friend="${friend.username}" data-action="block">Block</button>`;
+            buttonHTML = playButtonHTML + " " + chatButtonHTML + " " + blockButtonHTML;
+          }
+        }
+  
         return `
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <div>
-              ${avatarHTML} ${friend.username} ${statusHTML}
+              <img src="${fullAvatarUrl}" alt="Avatar" style="width:30px; height:30px; border-radius:50%; margin-right:10px;">
+              ${friend.username} ${statusHTML}
             </div>
-            <button class="btn btn-sm btn-danger remove-friend-btn" data-friend="${friend.username}">Remove</button>
+            <div>
+              ${buttonHTML}
+            </div>
           </li>`;
       }).join("") +
       `</ul>`;
@@ -279,16 +292,92 @@ function updateFriendsList(friends) {
     html = `<p>No tienes amigos añadidos.</p>`;
   }
   friendsListContainer.innerHTML = html;
-
-  // Asigna los eventos a los botones de eliminación
-  const removeButtons = document.querySelectorAll(".remove-friend-btn");
-  removeButtons.forEach(btn => {
+  
+  const actionButtons = document.querySelectorAll(".action-friend-btn");
+  actionButtons.forEach(btn => {
     btn.addEventListener("click", function() {
-      const friendToRemove = this.getAttribute("data-friend");
-      removeFriend(friendToRemove);
+      const friendName = this.getAttribute("data-friend");
+      const action = this.getAttribute("data-action");
+      if (action === "remove") {
+        removeFriend(friendName);
+      } else if (action === "play") {
+        window.location.hash = `game?friend=${friendName}`;
+      } else if (action === "chat") {
+        window.location.hash = `chat?friend=${friendName}`;
+      } else if (action === "block") {
+        if (confirm(`¿Estás seguro de bloquear a ${friendName}?`)) {
+          blockFriend(friendName);
+        }
+      } else if (action === "unblock") {
+        if (confirm(`¿Deseas desbloquear a ${friendName}?`)) {
+          unblockFriend(friendName);
+        }
+      }
     });
   });
 }
+
+
+
+
+
+function blockFriend(friendName) {
+  const token = getToken();
+  fetch("http://localhost:8000/api/users/block-friend/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify({ friend: friendName })
+  })
+    .then(resp => {
+      if (!resp.ok) {
+        return resp.json().then(errData => { throw errData; });
+      }
+      return resp.json();
+    })
+    .then(result => {
+      alert(result.message);
+      renderChatView();
+    })
+    .catch(err => {
+      console.error("Error blocking friend:", err);
+      alert("Error al bloquear al amigo: " + (err.error || "Error desconocido."));
+    });
+}
+
+function unblockFriend(friendName) {
+  const token = getToken();
+  fetch("http://localhost:8000/api/users/unblock-friend/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify({ friend: friendName })
+  })
+    .then(resp => {
+      if (!resp.ok) {
+        return resp.json().then(errData => { throw errData; });
+      }
+      return resp.json();
+    })
+    .then(result => {
+      alert(result.message);
+      renderChatView();
+    })
+    .catch(err => {
+      console.error("Error unblocking friend:", err);
+      alert("Error al desbloquear al amigo: " + (err.error || "Error desconocido."));
+    });
+}
+
+
+
+
+
+
 
 
 
@@ -323,70 +412,74 @@ function removeFriend(friendToRemove) {
 function renderFriendsView() {
   const token = getToken();
   const currentUser = getUsername();
-  // Obtenemos los datos del usuario, incluyendo la lista de amigos
+  // Establecemos el contexto "friends"
+  currentFriendsViewContext = "friends";
+  
   fetch("http://localhost:8000/api/users/detail/", {
     headers: { "Authorization": "Bearer " + token }
   })
-  .then(response => response.json())
-  .then(data => {
-    console.log("User data:", data);
-    const contentHtml = `
-      <h2>Friends</h2>
-      <div class="mb-3">
-        <label for="friendUsernameInput" class="form-label">Nombre de Usuario:</label>
-        <input type="text" id="friendUsernameInput" class="form-control" placeholder="Escribe el nombre del amigo">
-      </div>
-      <button id="addFriendBtn" class="btn btn-primary mb-4">Add Friend</button>
-      <h3>Lista de Amigos:</h3>
-      <div id="friendsListContainer">
-        <!-- Aquí se inyectará la lista de amigos -->
-      </div>
-    `;
-    renderLayout(contentHtml);
-
-    // Llamamos a la función para actualizar la lista de amigos
-    updateFriendsList(data.friends);
-
-    // Evento para agregar amigo
-    document.getElementById("addFriendBtn").addEventListener("click", () => {
-      const friendName = document.getElementById("friendUsernameInput").value.trim();
-      if (!friendName) {
-        alert("Por favor, ingresa un nombre de usuario.");
-        return;
-      }
-      if (friendName === currentUser) {
-        alert("No te puedes agregar a ti mismo.");
-        return;
-      }
-      fetch("http://localhost:8000/api/users/add-friend/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + token
-        },
-        body: JSON.stringify({ friend: friendName })
-      })
-      .then(resp => {
-        if (!resp.ok) {
-          return resp.json().then(errData => { throw errData; });
+    .then(response => response.json())
+    .then(data => {
+      console.log("User data:", data);
+      const contentHtml = `
+        <h2>Friends</h2>
+        <div class="mb-3">
+          <label for="friendUsernameInput" class="form-label">Nombre de Usuario:</label>
+          <input type="text" id="friendUsernameInput" class="form-control" placeholder="Escribe el nombre del amigo">
+        </div>
+        <button id="addFriendBtn" class="btn btn-primary mb-4">Add Friend</button>
+        <h3>Lista de Amigos:</h3>
+        <div id="friendsListContainer">
+          <!-- Aquí se inyectará la lista de amigos -->
+        </div>
+      `;
+      renderLayout(contentHtml);
+  
+      // Actualizamos la lista de amigos con el botón "Remove"
+      updateFriendsList(data.friends, "friends");
+  
+      document.getElementById("addFriendBtn").addEventListener("click", () => {
+        const friendName = document.getElementById("friendUsernameInput").value.trim();
+        if (!friendName) {
+          alert("Por favor, ingresa un nombre de usuario.");
+          return;
         }
-        return resp.json();
-      })
-      .then(result => {
-        alert(result.message);
-        renderFriendsView(); // Vuelve a renderizar para actualizar la lista
-      })
-      .catch(err => {
-        console.error("Error adding friend:", err);
-        alert("Error al añadir amigo: " + (err.error || "Error desconocido."));
+        if (friendName === currentUser) {
+          alert("No te puedes agregar a ti mismo.");
+          return;
+        }
+        fetch("http://localhost:8000/api/users/add-friend/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + token
+          },
+          body: JSON.stringify({ friend: friendName })
+        })
+          .then(resp => {
+            if (!resp.ok) {
+              return resp.json().then(errData => { throw errData; });
+            }
+            return resp.json();
+          })
+          .then(result => {
+            alert(result.message);
+            renderFriendsView(); // Re-renderiza para actualizar la lista.
+          })
+          .catch(err => {
+            console.error("Error adding friend:", err);
+            alert("Error al añadir amigo: " + (err.error || "Error desconocido."));
+          });
       });
+    })
+    .catch(err => {
+      console.error("Error fetching user details:", err);
+      alert("Error al obtener datos del usuario.");
     });
-  })
-  .catch(err => {
-    console.error("Error fetching user details:", err);
-    alert("Error al obtener datos del usuario.");
-  });
 }
+
+
+
 
 
 
@@ -500,25 +593,45 @@ function renderSettingsView() {
 
 // Vista Chat
 function renderChatView() {
-  const contentHtml = `
-    <h2>Chat</h2>
-    <div class="row">
-      <div class="col-12 col-md-3">
-        <h5>Usuarios Online</h5>
-        <ul class="nav flex-column" id="usersList"></ul>
-      </div>
-      <div class="col-12 col-md-9">
-        <p>Bienvenido al chat. Aquí puedes invitar a tus amigos y verlos conectados.</p>
-      </div>
-    </div>
-  `;
-  renderLayout(contentHtml);
-  // Si globalOnlineUsers tiene datos, actualiza la lista
-  if (globalOnlineUsers.length > 0) {
-    updateUsersList(globalOnlineUsers, getUsername());
-  }
-  // No reiniciamos el websocket porque ya está abierto globalmente
+  const token = getToken();
+  fetch("http://localhost:8000/api/users/detail/", {
+    headers: { "Authorization": "Bearer " + token }
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log("User data:", data);
+      // Actualiza la variable global de bloqueados (suponiendo que data.blocked_friends es un array de objetos con username)
+      globalBlockedUsers = data.blocked_friends.map(f => f.username);
+      
+      const contentHtml = `
+        <h2>Chat</h2>
+        <div class="row">
+          <div class="col-12 col-md-3">
+            <h5>Friends Online</h5>
+            <div id="friendsListContainer">
+              <!-- Aquí se inyectará la lista de amigos -->
+            </div>
+          </div>
+          <div class="col-12 col-md-9">
+            <p>Bienvenido al chat. Selecciona un amigo para chatear.</p>
+          </div>
+        </div>
+      `;
+      renderLayout(contentHtml);
+      // Establece el contexto "chat" para que se muestren los botones correspondientes:
+      currentFriendsViewContext = "chat";
+      updateFriendsList(data.friends, "chat");
+    })
+    .catch(err => {
+      console.error("Error fetching user details:", err);
+      alert("Error al obtener datos del usuario.");
+    });
 }
+
+
+
+
+
 
 
 // Vistas de Juego (IA, Local, Online) - Placeholders
@@ -728,13 +841,25 @@ function initUsersWebSocket() {
     fetch("http://localhost:8000/api/users/detail/", {
       headers: { "Authorization": "Bearer " + token }
     })
-    .then(response => response.json())
-    .then(data => {
-      if (data.friends) {
-        updateFriendsList(data.friends);
-      }
-    })
-    .catch(err => console.error("Error polling friend list:", err));
+      .then(response => response.json())
+      .then(data => {
+        if (data.friends) {
+          // Puedes utilizar la variable global currentFriendsViewContext
+          // O bien, determinar el contexto basado en el hash actual:
+          let context = currentFriendsViewContext;
+          if (!context) {
+            if (window.location.hash.includes("chat")) {
+              context = "chat";
+            } else if (window.location.hash.includes("friends")) {
+              context = "friends";
+            } else {
+              context = "friends"; // Valor por defecto
+            }
+          }
+          updateFriendsList(data.friends, context);
+        }
+      })
+      .catch(err => console.error("Error polling friend list:", err));
   }
   
   // Llama a pollFriendsList cada 1000 milisegundos (1 segundo)

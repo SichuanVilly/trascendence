@@ -12,5 +12,6 @@ class CustomUser(AbstractUser):
     #blank=True: Permite que este campo sea opcional.
     # Campo para amigos: relación many-to-many consigo mismo
     friends = models.ManyToManyField('self', symmetrical=True, blank=True)
+    blocked_friends = models.ManyToManyField('self', symmetrical=False, blank=True, related_name="blocked_by")
     def __str__(self):
         return self.username

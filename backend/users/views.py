@@ -59,7 +59,7 @@ class UserDetailView(APIView):
 
     def get(self, request):
         # Carga el usuario junto con la relación 'friends'
-        user = User.objects.prefetch_related('friends').get(pk=request.user.pk)
+        user = User.objects.prefetch_related('friends', 'blocked_friends').get(pk=request.user.pk)
         print("Amigos del usuario:", list(user.friends.all()))  # Debug
         serializer = UserSerializer(user)
         return Response(serializer.data)
@@ -157,3 +157,31 @@ class RemoveFriendView(APIView):
         )
         
         return Response({"message": f"{friend_username} eliminado de tus amigos."}, status=status.HTTP_200_OK)
+        
+class BlockFriendView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        friend_username = request.data.get("friend")
+        if not friend_username:
+            return Response({"error": "Debes enviar el nombre del amigo."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            friend = User.objects.get(username=friend_username)
+        except User.DoesNotExist:
+            return Response({"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        request.user.blocked_friends.add(friend)
+        return Response({"message": f"{friend_username} bloqueado."}, status=status.HTTP_200_OK)
+
+class UnblockFriendView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        friend_username = request.data.get("friend")
+        if not friend_username:
+            return Response({"error": "Debes enviar el nombre del amigo."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            friend = User.objects.get(username=friend_username)
+        except User.DoesNotExist:
+            return Response({"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        request.user.blocked_friends.remove(friend)
+        return Response({"message": f"{friend_username} desbloqueado."}, status=status.HTTP_200_OK)
