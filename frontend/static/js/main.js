@@ -5,10 +5,11 @@
 */
 
 /****************************************************
- * 1) VAR GLOBALES Y UTILIDADES: TOKEN, ...
+ * 1) VAR GLOBALES Y UTILIDADES: TOKEN, WS, etc.
  ****************************************************/
 let userSocket = null;  // WebSocket de usuarios online (en #home)
 let pongSocket = null;  // WebSocket de la partida (en #pong)
+let globalOnlineUsers = [];
 
 function getToken() {
   return localStorage.getItem("token");
@@ -30,73 +31,38 @@ function clearUsername() {
   localStorage.removeItem("username");
 }
 
-// Para extraer parámetros después de "#pong?room=..."
+// Extraer parámetros después de "#pong?room=..."
 function getHashQueryParam(param) {
-  const hash = window.location.hash.replace("#", ""); // "pong?room=xxx"
+  const hash = window.location.hash.replace("#", "");
   const queryIndex = hash.indexOf("?");
   if (queryIndex < 0) return null;
-  const queryString = hash.slice(queryIndex + 1); // "room=xxx"
+  const queryString = hash.slice(queryIndex + 1);
   const urlParams = new URLSearchParams(queryString);
   return urlParams.get(param);
 }
 
 /****************************************************
- * 2) ARRANQUE Y ROUTER
+ * FUNCIONES ADICIONALES PARA CIERRE DE WS
  ****************************************************/
-window.addEventListener("load", () => {
-  if (!window.location.hash) {
-    if (getToken()) window.location.hash = "#home";
-    else window.location.hash = "#login";
+function closeHomeWS() {
+  if (userSocket && userSocket.readyState === WebSocket.OPEN) {
+    console.log("Cerrando userSocket (Home)...");
+    userSocket.close();
   }
-  router();
-});
-window.addEventListener("hashchange", router);
-
-function router() {
-  const hash = window.location.hash.replace("#", "");
-  const token = getToken();
-
-  updateNavbarVisibility(!!token);
-
-  // === CIERRE WS ===
-  // Antes de cambiar de vista, cierra los websockets antiguos
-  closeHomeWS();
-  closePongWS();
-
-  if (hash.startsWith("pong")) {
-    // Vista PONG
-    if (!token) {
-      window.location.hash = "#login";
-      return;
-    }
-    const roomId = getHashQueryParam("room");
-    renderPongView(roomId);  // Esto abrirá pongSocket
-    return;
-  }
-
-  // Otras vistas
-  switch (hash) {
-    case "login":
-      if (token) window.location.hash = "#home";
-      else renderLoginView();
-      break;
-    case "register":
-      if (token) window.location.hash = "#home";
-      else renderRegisterView();
-      break;
-    case "home":
-      if (!token) window.location.hash = "#login";
-      else renderHomeView();  // Esto abrirá userSocket
-      break;
-    case "logout":
-      logout();
-      break;
-    default:
-      if (token) window.location.hash = "#home";
-      else window.location.hash = "#login";
-  }
+  userSocket = null;
 }
 
+function closePongWS() {
+  if (pongSocket && pongSocket.readyState === WebSocket.OPEN) {
+    console.log("Cerrando pongSocket...");
+    pongSocket.close();
+  }
+  pongSocket = null;
+}
+
+/****************************************************
+ * FUNCION: updateNavbarVisibility
+ ****************************************************/
 function updateNavbarVisibility(isLoggedIn) {
   const navLoginLink = document.getElementById("navLoginLink");
   const navRegisterLink = document.getElementById("navRegisterLink");
@@ -116,14 +82,461 @@ function updateNavbarVisibility(isLoggedIn) {
   }
 }
 
+/****************************************************
+ * 2) LAYOUT BASE: SIDEBAR FIJO Y CONTENIDO DINÁMICO
+ ****************************************************/
+function renderLayout(contentHtml) {
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="container-fluid" style="min-height: 100vh;">
+      <div class="row h-100">
+        <!-- Sidebar -->
+        <div class="col-12 col-md-3 col-lg-2 bg-dark text-white p-3">
+          <h3 class="mb-4">FT_Transcendence</h3>
+          <ul class="nav flex-column">
+            <li class="nav-item mb-2">
+              <a class="nav-link text-white" href="#home">Home</a>
+            </li>
+            <li class="nav-item mb-2">
+              <a class="nav-link text-white" href="#friends">Friends</a>
+            </li>
+            <li class="nav-item mb-2">
+              <a class="nav-link text-white" data-bs-toggle="collapse" href="#gameSubmenu" role="button" aria-expanded="false" aria-controls="gameSubmenu">
+                Game
+              </a>
+              <div class="collapse" id="gameSubmenu">
+                <ul class="nav flex-column ms-3 mt-2">
+                  <li class="nav-item">
+                    <a class="nav-link text-white" href="#game-ia">IA</a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-white" href="#game-local">Local</a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-white" href="#game-online">Online</a>
+                  </li>
+                </ul>
+              </div>
+            </li>
+            <li class="nav-item mb-2">
+              <a class="nav-link text-white" href="#chat">Chat</a>
+            </li>
+            <li class="nav-item mb-2">
+              <a class="nav-link text-white" href="#tournament">Tournament</a>
+            </li>
+            <li class="nav-item mb-2">
+              <a class="nav-link text-white" href="#settings">Settings</a>
+            </li>
+            <li class="nav-item mb-2">
+              <a class="nav-link text-white" href="#logout">Logout</a>
+            </li>
+          </ul>
+        </div>
+        <!-- Contenido Dinámico -->
+        <div class="col-12 col-md-9 col-lg-10 p-4" id="mainContent">
+          ${contentHtml}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+/****************************************************
+ * 3) ARRANQUE Y ROUTER
+ ****************************************************/
+window.addEventListener("load", () => {
+  if (!window.location.hash) {
+    if (getToken()) window.location.hash = "#home";
+    else window.location.hash = "#login";
+  }
+  router();
+});
+window.addEventListener("hashchange", router);
+
+function router() {
+  const hash = window.location.hash.replace("#", "");
+  const token = getToken();
+
+  updateNavbarVisibility(!!token);
+  //closeHomeWS();
+  closePongWS();
+
+  if (!token && hash !== "login" && hash !== "register") {
+    window.location.hash = "#login";
+    return;
+  }
+
+  if (token && hash !== "login" && hash !== "register") {
+    if (!userSocket || userSocket.readyState !== WebSocket.OPEN) {
+      initUsersWebSocket();
+    }
+  }
+
+  if (hash.startsWith("pong")) {
+    const roomId = getHashQueryParam("room");
+    renderPongView(roomId);
+    return;
+  }
+
+  switch (hash) {
+    case "login":
+      renderLoginView();
+      break;
+    case "register":
+      renderRegisterView();
+      break;
+    case "home":
+      renderHomeView();
+      break;
+    case "friends":
+      renderFriendsView();
+      break;
+    case "game-ia":
+      renderGameIaView();
+      break;
+    case "game-local":
+      renderGameLocalView();
+      break;
+    case "game-online":
+      renderGameOnlineView();
+      break;
+    case "chat":
+      renderChatView();
+      break;
+    case "tournament":
+      renderTournamentView();
+      break;
+    case "settings":
+      renderSettingsView();
+      break;
+    case "logout":
+      logout();
+      break;
+    default:
+      window.location.hash = token ? "#home" : "#login";
+  }
+}
+
 function logout() {
   clearToken();
   clearUsername();
+  closeHomeWS();
+  closePongWS();
   window.location.hash = "#login";
 }
 
+
 /****************************************************
- * 3) LOGIN Y REGISTER
+ * 4) VISTAS DINÁMICAS (Contenido central)
+ ****************************************************/
+
+// Vista Home
+function renderHomeView() {
+  const user = getUsername() || "Desconocido";
+  const contentHtml = `
+    <h1>¡Bienvenido, ${user}!</h1>
+    <p>Esta es tu pantalla de inicio. Selecciona alguna opción en el menú lateral.</p>
+  `;
+  renderLayout(contentHtml);
+}
+
+
+// Función que actualiza la lista de amigos en el DOM
+function updateFriendsList(friends) {
+  const friendsListContainer = document.getElementById("friendsListContainer");
+  if (!friendsListContainer) return;
+  let html = "";
+  if (friends && friends.length > 0) {
+    html = `<ul class="list-group">` +
+      friends.map(friend => {
+        // Construir la URL completa del avatar:
+        let avatarPath = friend.avatar ? friend.avatar : 'avatars/default_avatar.png';
+        // Si la ruta comienza con "/media/", la recortamos para poder concatenarla
+        if (avatarPath.startsWith('/media/')) {
+          avatarPath = avatarPath.slice(7); // elimina "/media/"
+        }
+        // Si la ruta no es absoluta, construimos la URL completa (ajusta el host/puerto según corresponda)
+        const fullAvatarUrl = avatarPath.startsWith('http')
+          ? avatarPath
+          : `http://localhost:8000/media/${avatarPath}`;
+
+        // Verificamos si el amigo está conectado
+        const isOnline = globalOnlineUsers.includes(friend.username);
+        const statusHTML = `<span style="color: ${isOnline ? 'green' : 'red'}; font-weight: bold; margin-left: 10px;">${isOnline ? 'Online' : 'Offline'}</span>`;
+        // Mostramos una versión reducida del avatar
+        const avatarHTML = `<img src="${fullAvatarUrl}" alt="Avatar" style="width:30px; height:30px; border-radius:50%; margin-right:10px;">`;
+        return `
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              ${avatarHTML} ${friend.username} ${statusHTML}
+            </div>
+            <button class="btn btn-sm btn-danger remove-friend-btn" data-friend="${friend.username}">Remove</button>
+          </li>`;
+      }).join("") +
+      `</ul>`;
+  } else {
+    html = `<p>No tienes amigos añadidos.</p>`;
+  }
+  friendsListContainer.innerHTML = html;
+
+  // Asigna los eventos a los botones de eliminación
+  const removeButtons = document.querySelectorAll(".remove-friend-btn");
+  removeButtons.forEach(btn => {
+    btn.addEventListener("click", function() {
+      const friendToRemove = this.getAttribute("data-friend");
+      removeFriend(friendToRemove);
+    });
+  });
+}
+
+
+
+
+
+function removeFriend(friendToRemove) {
+  const token = getToken();
+  fetch("http://localhost:8000/api/users/remove-friend/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify({ friend: friendToRemove })
+  })
+  .then(resp => {
+    if (!resp.ok) {
+      return resp.json().then(errData => { throw errData; });
+    }
+    return resp.json();
+  })
+  .then(result => {
+    alert(result.message);
+    renderFriendsView(); // O actualizar solo la lista llamando a updateFriendsList(result.friends) si el endpoint lo retorna.
+  })
+  .catch(err => {
+    console.error("Error removing friend:", err);
+    alert("Error al eliminar amigo: " + (err.error || "Error desconocido."));
+  });
+}
+
+function renderFriendsView() {
+  const token = getToken();
+  const currentUser = getUsername();
+  // Obtenemos los datos del usuario, incluyendo la lista de amigos
+  fetch("http://localhost:8000/api/users/detail/", {
+    headers: { "Authorization": "Bearer " + token }
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log("User data:", data);
+    const contentHtml = `
+      <h2>Friends</h2>
+      <div class="mb-3">
+        <label for="friendUsernameInput" class="form-label">Nombre de Usuario:</label>
+        <input type="text" id="friendUsernameInput" class="form-control" placeholder="Escribe el nombre del amigo">
+      </div>
+      <button id="addFriendBtn" class="btn btn-primary mb-4">Add Friend</button>
+      <h3>Lista de Amigos:</h3>
+      <div id="friendsListContainer">
+        <!-- Aquí se inyectará la lista de amigos -->
+      </div>
+    `;
+    renderLayout(contentHtml);
+
+    // Llamamos a la función para actualizar la lista de amigos
+    updateFriendsList(data.friends);
+
+    // Evento para agregar amigo
+    document.getElementById("addFriendBtn").addEventListener("click", () => {
+      const friendName = document.getElementById("friendUsernameInput").value.trim();
+      if (!friendName) {
+        alert("Por favor, ingresa un nombre de usuario.");
+        return;
+      }
+      if (friendName === currentUser) {
+        alert("No te puedes agregar a ti mismo.");
+        return;
+      }
+      fetch("http://localhost:8000/api/users/add-friend/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token
+        },
+        body: JSON.stringify({ friend: friendName })
+      })
+      .then(resp => {
+        if (!resp.ok) {
+          return resp.json().then(errData => { throw errData; });
+        }
+        return resp.json();
+      })
+      .then(result => {
+        alert(result.message);
+        renderFriendsView(); // Vuelve a renderizar para actualizar la lista
+      })
+      .catch(err => {
+        console.error("Error adding friend:", err);
+        alert("Error al añadir amigo: " + (err.error || "Error desconocido."));
+      });
+    });
+  })
+  .catch(err => {
+    console.error("Error fetching user details:", err);
+    alert("Error al obtener datos del usuario.");
+  });
+}
+
+
+
+
+
+// Vista Settings
+function renderSettingsView() {
+  const token = getToken();
+  fetch("http://localhost:8000/api/users/detail/", {
+    headers: { "Authorization": "Bearer " + token }
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log("User data:", data);
+    let avatarPath = data.avatar ? data.avatar : 'avatars/default_avatar.png';
+    if (avatarPath.startsWith('/media/')) {
+      avatarPath = avatarPath.slice(1);
+    }
+    const avatarUrl = avatarPath.startsWith('http')
+      ? avatarPath
+      : `http://localhost:8000/${avatarPath}`;
+    const contentHtml = `
+      <h2 class="mt-4">Configuración de Usuario</h2>
+      <div class="text-center my-4">
+        <img id="avatarImg" src="${avatarUrl}" alt="Avatar" style="width:150px; height:150px; border-radius:50%; cursor:pointer;">
+        <input type="file" id="avatarInput" style="display: none;" accept="image/*">
+      </div>
+      <div class="mb-3">
+        <label for="usernameInput" class="form-label">Nombre de Usuario:</label>
+        <input type="text" class="form-control" id="usernameInput" value="${data.username}">
+      </div>
+      <div class="mb-3">
+        <p>Victorias: <span id="winsCount">${data.wins != null ? data.wins : 0}</span></p>
+        <p>Derrotas: <span id="lossesCount">${data.losses != null ? data.losses : 0}</span></p>
+      </div>
+      <button class="btn btn-primary" id="saveSettingsBtn">Guardar cambios</button>
+      <button class="btn btn-danger mt-2" id="deleteUserBtn">Borrar Usuario</button>
+    `;
+    renderLayout(contentHtml);
+    document.getElementById("avatarImg").addEventListener("click", () => {
+      document.getElementById("avatarInput").click();
+    });
+    document.getElementById("avatarInput").addEventListener("change", function() {
+      const file = this.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById("avatarImg").src = e.target.result;
+        }
+        reader.readAsDataURL(file);
+      }
+    });
+    document.getElementById("saveSettingsBtn").addEventListener("click", () => {
+      const formData = new FormData();
+      const newUsername = document.getElementById("usernameInput").value;
+      formData.append("username", newUsername);
+      const avatarFile = document.getElementById("avatarInput").files[0];
+      if (avatarFile) {
+        formData.append("avatar", avatarFile);
+      }
+      fetch("http://localhost:8000/api/users/update/", {
+        method: "PATCH",
+        headers: { "Authorization": "Bearer " + token },
+        body: formData
+      })
+      .then(resp => {
+        if (!resp.ok) {
+          return resp.json().then(errData => { throw errData; });
+        }
+        return resp.json();
+      })
+      .then(updatedData => {
+        alert("Datos actualizados exitosamente.");
+        setUsername(updatedData.username);
+        renderSettingsView();
+      })
+      .catch(err => {
+        console.error("Error actualizando datos:", err);
+        alert("Error al actualizar los datos.");
+      });
+    });
+    // Botón para borrar usuario
+    document.getElementById("deleteUserBtn").addEventListener("click", () => {
+      if (confirm("¿Estás seguro de que deseas borrar tu cuenta? Esta acción no se puede deshacer.")) {
+        fetch("http://localhost:8000/api/users/delete/", {
+          method: "DELETE",
+          headers: { "Authorization": "Bearer " + token }
+        })
+        .then(resp => {
+          if (!resp.ok) {
+            return resp.json().then(errData => { throw errData; });
+          }
+          return resp.json();
+        })
+        .then(data => {
+          alert("Cuenta eliminada exitosamente.");
+          logout();
+        })
+        .catch(err => {
+          console.error("Error eliminando usuario:", err);
+          alert("Error al eliminar la cuenta.");
+        });
+      }
+    });
+  })
+  .catch(err => {
+    console.error("Error fetching user details:", err);
+  });
+}
+
+
+// Vista Chat
+function renderChatView() {
+  const contentHtml = `
+    <h2>Chat</h2>
+    <div class="row">
+      <div class="col-12 col-md-3">
+        <h5>Usuarios Online</h5>
+        <ul class="nav flex-column" id="usersList"></ul>
+      </div>
+      <div class="col-12 col-md-9">
+        <p>Bienvenido al chat. Aquí puedes invitar a tus amigos y verlos conectados.</p>
+      </div>
+    </div>
+  `;
+  renderLayout(contentHtml);
+  // Si globalOnlineUsers tiene datos, actualiza la lista
+  if (globalOnlineUsers.length > 0) {
+    updateUsersList(globalOnlineUsers, getUsername());
+  }
+  // No reiniciamos el websocket porque ya está abierto globalmente
+}
+
+
+// Vistas de Juego (IA, Local, Online) - Placeholders
+function renderGameIaView() {
+  const contentHtml = `<h2>Juego: IA</h2><p>Contenido para juego contra IA.</p>`;
+  renderLayout(contentHtml);
+}
+function renderGameLocalView() {
+  const contentHtml = `<h2>Juego: Local</h2><p>Contenido para juego local.</p>`;
+  renderLayout(contentHtml);
+}
+function renderGameOnlineView() {
+  const contentHtml = `<h2>Juego: Online</h2><p>Contenido para juego online.</p>`;
+  renderLayout(contentHtml);
+}
+
+/****************************************************
+ * 5) LOGIN Y REGISTER (Sin sidebar)
  ****************************************************/
 function renderLoginView() {
   const app = document.getElementById("app");
@@ -150,7 +563,6 @@ function renderLoginView() {
       </div>
     </div>
   `;
-
   document.getElementById("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const username = document.getElementById("username").value;
@@ -159,7 +571,7 @@ function renderLoginView() {
       const resp = await fetch("http://localhost:8000/api/users/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password })
       });
       const data = await resp.json();
       if (resp.ok) {
@@ -206,7 +618,6 @@ function renderRegisterView() {
       </div>
     </div>
   `;
-
   document.getElementById("registerForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const username = document.getElementById("username").value;
@@ -215,7 +626,7 @@ function renderRegisterView() {
       const resp = await fetch("http://localhost:8000/api/users/register/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password })
       });
       const data = await resp.json();
       if (resp.ok) {
@@ -232,87 +643,115 @@ function renderRegisterView() {
 }
 
 /****************************************************
- * 4) VISTA HOME (abre userSocket)
+ * 6) VISTA PONG (abre pongSocket)
  ****************************************************/
-function renderHomeView() {
+function renderPongView(roomId) {
   const app = document.getElementById("app");
-  const user = getUsername() || "Desconocido";
-
+  if (!roomId) {
+    app.innerHTML = "<p>Error: faltó 'roomId'</p>";
+    return;
+  }
   app.innerHTML = `
-    <div class="row">
-      <div class="col-12 col-md-3 col-lg-2">
-        <div class="bg-white h-100 p-3" style="min-height: 80vh;">
-          <h5>Usuarios Online</h5>
-          <ul class="nav flex-column" id="usersList"></ul>
-        </div>
+    <div class="text-center">
+      <h2>Pong - Sala: ${roomId}</h2>
+      <div id="playerNames" style="display:flex; justify-content:space-between; max-width:800px; margin:10px auto;">
+        <div id="leftPlayerName">Jugador 1</div>
+        <div id="rightPlayerName">Jugador 2</div>
       </div>
-      <div class="col-12 col-md-9 col-lg-10">
-        <h1>Bienvenido, ${user}!</h1>
-        <p>Haz clic en un usuario (en la lista izquierda) para invitarlo a jugar Pong.</p>
+      <canvas id="gameCanvas" width="800" height="400"></canvas>
+      <div class="mt-2 d-flex justify-content-between" style="max-width: 800px; margin: 0 auto;">
+        <div id="leftScore">0</div>
+        <div id="rightScore">0</div>
       </div>
+      <p id="countdown" style="font-size:1.5rem; margin-top:10px;"></p>
     </div>
   `;
-
-  initUsersWebSocket(); // Abre userSocket
+  // Reiniciamos variables del juego
+  myPaddle = null;
+  paddle1Pos = 50;
+  paddle2Pos = 50;
+  ballPos = { x: 50, y: 50 };
+  gameOver = false;
+  players = { player1: null, player2: null };
+  initPongWebSocket(roomId);
+  initPongCanvasLoop();
+  startCountdown(roomId);
 }
 
-function closeHomeWS() {
-  // Cierra el userSocket si está abierto
-  if (userSocket && userSocket.readyState === WebSocket.OPEN) {
-    console.log("Cerrando userSocket (Home)...");
-    userSocket.close();
-  }
-  userSocket = null;
-}
-
+/****************************************************
+ * WS Y FUNCIONES PARA CHAT, INVITACIONES, etc.
+ ****************************************************/
 function initUsersWebSocket() {
   const token = getToken();
   const currentUser = getUsername();
   if (!token || !currentUser) return;
-
   const wsUrl = `ws://localhost:8000/ws/online_users/?token=${token}`;
   console.log("Abriendo userSocket:", wsUrl);
   userSocket = new WebSocket(wsUrl);
-
   userSocket.onopen = () => console.log("userSocket abierto");
   userSocket.onclose = (evt) => console.log("userSocket cerrado", evt);
   userSocket.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data);
       if (data.users) {
-        updateUsersList(data.users, currentUser);
-      } else if (data.type === "invite" && data.to === currentUser) {
+        // Actualiza la lista global de usuarios online
+        globalOnlineUsers = data.users;
+        updateUsersList(data.users, getUsername());
+        // Si la vista de amigos está visible, actualizamos la lista de amigos
+        if (document.getElementById("friendsListContainer")) {
+          // Se actualiza la lista de amigos usando data.friends si existe,
+          // o un array vacío de lo contrario
+          updateFriendsList(data.friends || []);
+        }
+      } else if (data.type === "friend_update") {
+        // Actualiza la lista de amigos en directo
+        updateFriendsList(data.friends);
+      } else if (data.type === "invite" && data.to === getUsername()) {
         showInvitationReceived(data);
-      } else if (data.type === "cancel_invite" && data.to === currentUser) {
+      } else if (data.type === "cancel_invite" && data.to === getUsername()) {
         alert(`La invitación de ${data.from} ha sido cancelada.`);
       } else if (data.type === "start_game") {
-        // Cierra modal e inicia #pong
         const inviteModal = document.getElementById("inviteModal");
         if (inviteModal) {
           const instance = bootstrap.Modal.getInstance(inviteModal);
           if (instance) instance.hide();
         }
-        // El fromUser ha aceptado y se inicia la partida
         window.location.hash = `pong?room=${data.game_data.room}`;
       }
     } catch (err) {
       console.error("Error en userSocket.onmessage:", err);
     }
   };
+  
+  function pollFriendsList() {
+    const token = getToken();
+    fetch("http://localhost:8000/api/users/detail/", {
+      headers: { "Authorization": "Bearer " + token }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.friends) {
+        updateFriendsList(data.friends);
+      }
+    })
+    .catch(err => console.error("Error polling friend list:", err));
+  }
+  
+  // Llama a pollFriendsList cada 1000 milisegundos (1 segundo)
+  setInterval(pollFriendsList, 1000);
+  
+  
 }
 
 function updateUsersList(users, currentUser) {
   const ul = document.getElementById("usersList");
-  if (!ul) return; // Evita error si no estás en home
-
+  if (!ul) return;
   ul.innerHTML = "";
   users.forEach((u) => {
     const li = document.createElement("li");
     li.className = "nav-item py-1";
-    if (u === currentUser) {
-      li.textContent = `${u} (tú)`;
-    } else {
-      li.textContent = u;
+    li.textContent = (u === currentUser) ? `${u} (tú)` : u;
+    if (u !== currentUser) {
       li.style.cursor = "pointer";
       li.addEventListener("click", () => inviteUser(u, currentUser));
     }
@@ -328,7 +767,6 @@ function inviteUser(toUser, fromUser) {
   modal.show();
 }
 
-// Botones del modal de invitación
 const btnInviteConfirm = document.getElementById("btnInviteConfirm");
 btnInviteConfirm.addEventListener("click", function() {
   const from = getUsername();
@@ -354,14 +792,13 @@ btnInviteCancel.addEventListener("click", function() {
 
 function showInvitationReceived(inviteData) {
   document.getElementById("inviteResponseModalTitle").textContent = "Invitación recibida";
-  document.getElementById("inviteResponseModalBody").textContent = 
+  document.getElementById("inviteResponseModalBody").textContent =
     `${inviteData.from} te ha invitado a jugar Pong. ¿Aceptas?`;
   window.inviteFromUser = inviteData.from;
   const modal = new bootstrap.Modal(document.getElementById("inviteResponseModal"));
   modal.show();
 }
 
-// Botones del modal de respuesta
 const btnAcceptInvite = document.getElementById("btnAcceptInvite");
 btnAcceptInvite.addEventListener("click", function() {
   const from = getUsername();
@@ -391,206 +828,14 @@ function hideInvitationModal() {
 }
 
 /****************************************************
- * 5) VISTA PONG (abre pongSocket)
- ****************************************************/
-function renderPongView(roomId) {
-  const app = document.getElementById("app");
-  if (!roomId) {
-    app.innerHTML = "<p>Error: faltó 'roomId'</p>";
-    return;
-  }
-  app.innerHTML = `
-    <div class="text-center">
-      <h2>Pong - Sala: ${roomId}</h2>
-      <div id="playerNames" style="display:flex; justify-content:space-between; max-width:800px; margin:10px auto;">
-        <div id="leftPlayerName">Jugador 1</div>
-        <div id="rightPlayerName">Jugador 2</div>
-      </div>
-      <canvas id="gameCanvas" width="800" height="400"></canvas>
-      <div class="mt-2 d-flex justify-content-between" style="max-width: 800px; margin: 0 auto;">
-        <div id="leftScore">0</div>
-        <div id="rightScore">0</div>
-      </div>
-      <p id="countdown" style="font-size:1.5rem; margin-top:10px;"></p>
-    </div>
-  `;
-
-  // Reinciamos variables de Pong
-  myPaddle = null;
-  paddle1Pos = 50; 
-  paddle2Pos = 50; 
-  ballPos = { x: 50, y: 50 };
-  gameOver = false;
-  players = { player1: null, player2: null };
-
-  initPongWebSocket(roomId);
-  initPongCanvasLoop();
-  startCountdown(roomId);
-}
-
-function closePongWS() {
-  // Cierra el pongSocket si está abierto
-  if (pongSocket && pongSocket.readyState === WebSocket.OPEN) {
-    console.log("Cerrando pongSocket...");
-    pongSocket.close();
-  }
-  pongSocket = null;
-}
-
-function initPongWebSocket(roomId) {
-  const token = getToken();
-  const currentUser = getUsername();
-  if (!token || !currentUser) {
-    window.location.hash = "#login";
-    return;
-  }
-  const wsUrl = `ws://localhost:8000/ws/pong/${roomId}/?token=${token}`;
-  console.log("Abriendo pongSocket:", wsUrl);
-  pongSocket = new WebSocket(wsUrl);
-
-  pongSocket.onopen = () => console.log("WS Pong abierto");
-  pongSocket.onclose = (e) => console.log("WS Pong cerrado", e);
-  pongSocket.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.type === "game_over") {
-        gameOver = true;
-        displayGameOver(data);
-        return;
-      }
-      if (data.type === "room_update") {
-        players = data.players;
-        if (players.player1 === currentUser) myPaddle = "paddle_1";
-        else if (players.player2 === currentUser) myPaddle = "paddle_2";
-        updatePlayerNames();
-      } else if (data.type === "update_paddle") {
-        if (data.paddle === "paddle_1") {
-          paddle1Pos = data.position;
-        } else {
-          paddle2Pos = data.position;
-        }
-      } else if (data.type === "game_update") {
-        if (data.ball_x !== undefined) ballPos.x = data.ball_x;
-        if (data.ball_y !== undefined) ballPos.y = data.ball_y;
-        if (data.score1 !== undefined && data.score2 !== undefined) {
-          updateScore(data.score1, data.score2);
-        }
-      }
-    } catch (err) {
-      console.error("Error Pong WS parse:", err);
-    }
-  };
-
-  // Listener para mover palas
-  document.addEventListener("keydown", onPongKeyDown);
-}
-
-function initPongCanvasLoop() {
-  const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
-  const cw = canvas.width;
-  const ch = canvas.height;
-
-  const paddleWidth = 10;
-  const paddleHeight = 80;
-  const ballRadius = 10;
-
-  function drawFrame() {
-    ctx.clearRect(0, 0, cw, ch);
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, cw, ch);
-
-    // Palas
-    const p1x = 0.05 * cw;
-    const p1y = (paddle1Pos / 100) * ch - paddleHeight/2;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(p1x, p1y, paddleWidth, paddleHeight);
-
-    const p2x = 0.95 * cw - paddleWidth;
-    const p2y = (paddle2Pos / 100) * ch - paddleHeight/2;
-    ctx.fillRect(p2x, p2y, paddleWidth, paddleHeight);
-
-    // Bola
-    const bx = (ballPos.x / 100) * cw;
-    const by = (ballPos.y / 100) * ch;
-    ctx.beginPath();
-    ctx.arc(bx, by, ballRadius, 0, 2 * Math.PI);
-    ctx.fill();
-  }
-
-  function loop() {
-    if (!gameOver) {
-      drawFrame();
-      requestAnimationFrame(loop);
-    }
-  }
-  loop();
-}
-
-function onPongKeyDown(e) {
-  if (gameOver) return;
-  let direction = 0;
-  if (e.key === "ArrowUp") direction = -5;
-  if (e.key === "ArrowDown") direction = 5;
-  if (direction !== 0 && myPaddle && pongSocket) {
-    const currentPos = (myPaddle === "paddle_1") ? paddle1Pos : paddle2Pos;
-    pongSocket.send(JSON.stringify({
-      type: "move_paddle",
-      username: getUsername(),
-      direction,
-      position: currentPos
-    }));
-  }
-}
-
-function updatePlayerNames() {
-  document.getElementById("leftPlayerName").textContent = players.player1 || "Jugador 1";
-  document.getElementById("rightPlayerName").textContent = players.player2 || "Jugador 2";
-}
-
-function updateScore(s1, s2) {
-  document.getElementById("leftScore").textContent = s1;
-  document.getElementById("rightScore").textContent = s2;
-}
-
-function startCountdown(roomId) {
-  let count = 3;
-  const cdEl = document.getElementById("countdown");
-  cdEl.textContent = count;
-
-  const intervalId = setInterval(() => {
-    count--;
-    if (count > 0) {
-      cdEl.textContent = count;
-    } else {
-      cdEl.textContent = "¡GO!";
-      clearInterval(intervalId);
-      setTimeout(() => {
-        cdEl.textContent = "";
-        // Avisar al server que inicie el juego
-        if (pongSocket) {
-          pongSocket.send(JSON.stringify({ type: "start_game", room: roomId }));
-        }
-      }, 500);
-    }
-  }, 1000);
-}
-
-/****************************************************
- * 6) DISPLAY GAME OVER
+ * 7) DISPLAY GAME OVER
  ****************************************************/
 function displayGameOver(gameData) {
   console.log("==> GAME OVER DATA:", gameData);
-
   gameOver = true;
   document.removeEventListener("keydown", onPongKeyDown);
-
   let winner = gameData.winner || "Desconocido";
-  let resultMessage = "Has perdido";
-  if (getUsername() === winner) {
-    resultMessage = "¡Has ganado!";
-  }
-
+  let resultMessage = (getUsername() === winner) ? "¡Has ganado!" : "Has perdido";
   const overlay = document.createElement("div");
   overlay.style.position = "fixed";
   overlay.style.top = "0";
@@ -603,18 +848,15 @@ function displayGameOver(gameData) {
   overlay.style.justifyContent = "center";
   overlay.style.alignItems = "center";
   overlay.style.zIndex = 9999;
-
   const h2 = document.createElement("h2");
   h2.style.color = "#fff";
   h2.textContent = resultMessage;
   overlay.appendChild(h2);
-
   const p = document.createElement("p");
   p.style.color = "#fff";
   p.style.fontSize = "24px";
   p.textContent = `Ganador: ${winner} | ${gameData.score1} - ${gameData.score2}`;
   overlay.appendChild(p);
-
   const btn = document.createElement("button");
   btn.className = "btn btn-primary mt-3";
   btn.textContent = "Volver al Home";
@@ -623,6 +865,5 @@ function displayGameOver(gameData) {
     window.location.hash = "#home";
   };
   overlay.appendChild(btn);
-
   document.body.appendChild(overlay);
 }

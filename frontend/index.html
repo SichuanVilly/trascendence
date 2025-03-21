@@ -4,15 +4,13 @@
   <meta charset="UTF-8">
   <title>Mi SPA Pong</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Bootstrap (CDN). Puedes descargarlo si prefieres local -->
+  <!-- Bootstrap (CDN) -->
   <link 
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
     rel="stylesheet"
   >
   <style>
-    /* Opcional: estilos para la vista Pong dentro de la SPA */
-    /* Ocultamos bordes o ajustamos layout según tus gustos */
+    /* Estilos opcionales para el canvas de Pong */
     #gameCanvas {
       display: block;
       width: 800px; 
@@ -38,7 +36,7 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          <!-- Se ocultan/mostrarán dinámicamente con JavaScript -->
+          <!-- Enlaces se mostrarán/ocultarán dinámicamente -->
           <li class="nav-item">
             <a class="nav-link" href="#login" id="navLoginLink">Login</a>
           </li>
@@ -56,12 +54,10 @@
     </div>
   </nav>
 
-  <!-- Contenedor general donde inyectaremos todas las vistas -->
-  <div class="container py-4" id="app">
-    <!-- Aquí irán #login, #register, #home, #pong, etc. de forma dinámica -->
-  </div>
+  <!-- Contenedor general donde se inyectarán las vistas -->
+  <div id="app"></div>
 
-  <!-- MODALS para invitaciones (vista #home) -->
+  <!-- MODALS para invitaciones -->
   <!-- Modal para invitar a jugar -->
   <div class="modal fade" id="inviteModal" tabindex="-1" aria-labelledby="inviteModalTitle" aria-hidden="true">
     <div class="modal-dialog">
@@ -102,7 +98,7 @@
 
   <!-- Bootstrap Bundle JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- Script principal que contiene TODO: router, login, register, home e incluso Pong -->
+  <!-- Script principal -->
   <script src="static/js/main.js"></script>
 </body>
 </html>
