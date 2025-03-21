@@ -203,7 +203,7 @@ function startCountdown() {
     }
   }, 1000);
 }
-startCountdown();
+
 
 // Función para mostrar el pop up de Game Over
 function displayGameOver(gameData) {

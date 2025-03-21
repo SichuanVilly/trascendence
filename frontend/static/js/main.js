@@ -340,7 +340,7 @@ function updateFriendsList(friends, viewContext = "friends") {
       if (action === "remove") {
         removeFriend(friendName);
       } else if (action === "play") {
-        window.location.hash = `game?friend=${friendName}`;
+        inviteUser(friendName, getUsername());
       } else if (action === "chat") {
         window.location.hash = `chat?friend=${friendName}`;
       } else if (action === "block") {
@@ -856,7 +856,7 @@ function renderRegisterView() {
 }
 
 /****************************************************
- * 6) VISTA PONG (abre pongSocket)
+ * 5) VISTA PONG (abre pongSocket)
  ****************************************************/
 function renderPongView(roomId) {
   const app = document.getElementById("app");
@@ -879,16 +879,217 @@ function renderPongView(roomId) {
       <p id="countdown" style="font-size:1.5rem; margin-top:10px;"></p>
     </div>
   `;
-  // Reiniciamos variables del juego
+
+  // Reinciamos variables de Pong
   myPaddle = null;
-  paddle1Pos = 50;
-  paddle2Pos = 50;
+  paddle1Pos = 50; 
+  paddle2Pos = 50; 
   ballPos = { x: 50, y: 50 };
   gameOver = false;
   players = { player1: null, player2: null };
+
   initPongWebSocket(roomId);
   initPongCanvasLoop();
   startCountdown(roomId);
+}
+
+function closePongWS() {
+  // Cierra el pongSocket si está abierto
+  if (pongSocket && pongSocket.readyState === WebSocket.OPEN) {
+    console.log("Cerrando pongSocket...");
+    pongSocket.close();
+  }
+  pongSocket = null;
+}
+
+function initPongWebSocket(roomId) {
+  const token = getToken();
+  const currentUser = getUsername();
+  if (!token || !currentUser) {
+    window.location.hash = "#login";
+    return;
+  }
+  const wsUrl = `${WS_BASE_URL}/ws/pong/${roomId}/?token=${token}`;
+  console.log("Abriendo pongSocket:", wsUrl);
+  pongSocket = new WebSocket(wsUrl);
+
+  pongSocket.onopen = () => console.log("WS Pong abierto");
+  pongSocket.onclose = (e) => console.log("WS Pong cerrado", e);
+  pongSocket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === "game_over") {
+        gameOver = true;
+        displayGameOver(data);
+        return;
+      }
+      if (data.type === "room_update") {
+        players = data.players;
+        if (players.player1 === currentUser) myPaddle = "paddle_1";
+        else if (players.player2 === currentUser) myPaddle = "paddle_2";
+        updatePlayerNames();
+      } else if (data.type === "update_paddle") {
+        if (data.paddle === "paddle_1") {
+          paddle1Pos = data.position;
+        } else {
+          paddle2Pos = data.position;
+        }
+      } else if (data.type === "game_update") {
+        if (data.ball_x !== undefined) ballPos.x = data.ball_x;
+        if (data.ball_y !== undefined) ballPos.y = data.ball_y;
+        if (data.score1 !== undefined && data.score2 !== undefined) {
+          updateScore(data.score1, data.score2);
+        }
+      }
+    } catch (err) {
+      console.error("Error Pong WS parse:", err);
+    }
+  };
+
+  // Listener para mover palas
+  document.addEventListener("keydown", onPongKeyDown);
+}
+
+function initPongCanvasLoop() {
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  const cw = canvas.width;
+  const ch = canvas.height;
+
+  const paddleWidth = 10;
+  const paddleHeight = 80;
+  const ballRadius = 10;
+
+  function drawFrame() {
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cw, ch);
+
+    // Palas
+    const p1x = 0.05 * cw;
+    const p1y = (paddle1Pos / 100) * ch - paddleHeight/2;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(p1x, p1y, paddleWidth, paddleHeight);
+
+    const p2x = 0.95 * cw - paddleWidth;
+    const p2y = (paddle2Pos / 100) * ch - paddleHeight/2;
+    ctx.fillRect(p2x, p2y, paddleWidth, paddleHeight);
+
+    // Bola
+    const bx = (ballPos.x / 100) * cw;
+    const by = (ballPos.y / 100) * ch;
+    ctx.beginPath();
+    ctx.arc(bx, by, ballRadius, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  function loop() {
+    if (!gameOver) {
+      drawFrame();
+      requestAnimationFrame(loop);
+    }
+  }
+  loop();
+}
+
+function onPongKeyDown(e) {
+  if (gameOver) return;
+  let direction = 0;
+  if (e.key === "ArrowUp") direction = -5;
+  if (e.key === "ArrowDown") direction = 5;
+  if (direction !== 0 && myPaddle && pongSocket) {
+    const currentPos = (myPaddle === "paddle_1") ? paddle1Pos : paddle2Pos;
+    pongSocket.send(JSON.stringify({
+      type: "move_paddle",
+      username: getUsername(),
+      direction,
+      position: currentPos
+    }));
+  }
+}
+
+function updatePlayerNames() {
+  document.getElementById("leftPlayerName").textContent = players.player1 || "Jugador 1";
+  document.getElementById("rightPlayerName").textContent = players.player2 || "Jugador 2";
+}
+
+function updateScore(s1, s2) {
+  document.getElementById("leftScore").textContent = s1;
+  document.getElementById("rightScore").textContent = s2;
+}
+
+function startCountdown(roomId) {
+  let count = 3;
+  const cdEl = document.getElementById("countdown");
+  cdEl.textContent = count;
+
+  const intervalId = setInterval(() => {
+    count--;
+    if (count > 0) {
+      cdEl.textContent = count;
+    } else {
+      cdEl.textContent = "¡GO!";
+      clearInterval(intervalId);
+      setTimeout(() => {
+        cdEl.textContent = "";
+        // Avisar al server que inicie el juego
+        if (pongSocket) {
+          pongSocket.send(JSON.stringify({ type: "start_game", room: roomId }));
+        }
+      }, 500);
+    }
+  }, 1000);
+}
+
+/****************************************************
+ * 6) DISPLAY GAME OVER
+ ****************************************************/
+function displayGameOver(gameData) {
+  console.log("==> GAME OVER DATA:", gameData);
+
+  gameOver = true;
+  document.removeEventListener("keydown", onPongKeyDown);
+
+  let winner = gameData.winner || "Desconocido";
+  let resultMessage = "Has perdido";
+  if (getUsername() === winner) {
+    resultMessage = "¡Has ganado!";
+  }
+
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100%";
+  overlay.style.height = "100%";
+  overlay.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+  overlay.style.display = "flex";
+  overlay.style.flexDirection = "column";
+  overlay.style.justifyContent = "center";
+  overlay.style.alignItems = "center";
+  overlay.style.zIndex = 9999;
+
+  const h2 = document.createElement("h2");
+  h2.style.color = "#fff";
+  h2.textContent = resultMessage;
+  overlay.appendChild(h2);
+
+  const p = document.createElement("p");
+  p.style.color = "#fff";
+  p.style.fontSize = "24px";
+  p.textContent = `Ganador: ${winner} | ${gameData.score1} - ${gameData.score2}`;
+  overlay.appendChild(p);
+
+  const btn = document.createElement("button");
+  btn.className = "btn btn-primary mt-3";
+  btn.textContent = "Volver al Home";
+  btn.onclick = () => {
+    document.body.removeChild(overlay);
+    window.location.hash = "#home";
+  };
+  overlay.appendChild(btn);
+
+  document.body.appendChild(overlay);
 }
 
 /****************************************************
