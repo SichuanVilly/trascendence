@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import models
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -12,7 +13,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from rest_framework.decorators import api_view, permission_classes
-
+from .models import MatchHistory
 
 User = get_user_model()
 
@@ -217,7 +218,47 @@ class UpdateStatsView(APIView):
 
         return Response({'message': 'Estadísticas actualizadas exitosamente.'}, status=status.HTTP_200_OK)
 
-    
+class MatchHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        matches = MatchHistory.objects.filter(models.Q(player1=user) | models.Q(player2=user)).order_by('-played_at')
+        data = [{
+            "player1": m.player1.username,
+            "player2": m.player2.username,
+            "score1": m.score1,
+            "score2": m.score2,
+            "winner": m.winner.username if m.winner else "Desconocido",
+            "played_at": m.played_at.strftime("%Y-%m-%d %H:%M")
+        } for m in matches]
+        return Response(data)
+        
+class SaveMatchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data
+        try:
+            player1 = User.objects.get(username=data["player1"])
+            player2 = User.objects.get(username=data["player2"])
+            winner = User.objects.get(username=data["winner"]) if data["winner"] else None
+
+            MatchHistory.objects.create(
+                player1=player1,
+                player2=player2,
+                score1=data["score1"],
+                score2=data["score2"],
+                winner=winner
+            )
+            return Response({"message": "Partida guardada correctamente."}, status=201)
+
+        except User.DoesNotExist:
+            return Response({"error": "Uno de los usuarios no existe."}, status=400)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def update_my_stat(request):

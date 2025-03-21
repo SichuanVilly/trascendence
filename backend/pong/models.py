@@ -44,3 +44,4 @@ class PongRoom(models.Model):
             self.delete()
         else:
             self.save()
+

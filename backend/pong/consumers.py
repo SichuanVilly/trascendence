@@ -214,6 +214,15 @@ class PongGameConsumer(AsyncWebsocketConsumer):
 
         logging.debug("🏁 Bucle de juego finalizado")
 
+    @database_sync_to_async
+    def save_match_result(self, winner):
+        MatchHistory.objects.create(
+            player1=self.room.player1,
+            player2=self.room.player2,
+            score1=self.score1,
+            score2=self.score2,
+            winner=winner
+        )
     async def declare_winner(self, winner_name):
         # Actualiza las estadísticas de ambos jugadores (solo una vez)
         await self.update_stats(winner_name)
@@ -234,6 +243,11 @@ class PongGameConsumer(AsyncWebsocketConsumer):
                 }
             }
         )
+        if winner_name == self.player1_name:
+            winner = self.room.player1
+        else:
+            winner = self.room.player2
+        await self.save_match_result(winner)
         self.game_loop_running = False
 
     async def send_game_update(self, ball_x, ball_y):

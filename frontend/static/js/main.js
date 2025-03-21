@@ -627,110 +627,150 @@ function renderPrivateChatView(friendUsername) {
 
 
 
-// Vista Settings
 function renderSettingsView() {
   const token = getToken();
   fetch(`${API_BASE_URL}/api/users/detail/`, {
     headers: { "Authorization": "Bearer " + token }
   })
-  .then(response => response.json())
-  .then(data => {
-    console.log("User data:", data);
-    let avatarPath = data.avatar ? data.avatar : 'avatars/default_avatar.png';
-    if (avatarPath.startsWith('/media/')) {
-      avatarPath = avatarPath.slice(1);
-    }
-    const avatarUrl = avatarPath.startsWith('http')
-      ? avatarPath
-      : `${API_BASE_URL}/${avatarPath}`;
-    const contentHtml = `
-      <h2 class="mt-4">Configuración de Usuario</h2>
-      <div class="text-center my-4">
-        <img id="avatarImg" src="${avatarUrl}" alt="Avatar" style="width:150px; height:150px; border-radius:50%; cursor:pointer;">
-        <input type="file" id="avatarInput" style="display: none;" accept="image/*">
-      </div>
-      <div class="mb-3">
-        <label for="usernameInput" class="form-label">Nombre de Usuario:</label>
-        <input type="text" class="form-control" id="usernameInput" value="${data.username}">
-      </div>
-      <div class="mb-3">
-        <p>Victorias: <span id="winsCount">${data.wins != null ? data.wins : 0}</span></p>
-        <p>Derrotas: <span id="lossesCount">${data.losses != null ? data.losses : 0}</span></p>
-      </div>
-      <button class="btn btn-primary" id="saveSettingsBtn">Guardar cambios</button>
-      <button class="btn btn-danger mt-2" id="deleteUserBtn">Borrar Usuario</button>
-    `;
-    renderLayout(contentHtml);
-    document.getElementById("avatarImg").addEventListener("click", () => {
-      document.getElementById("avatarInput").click();
-    });
-    document.getElementById("avatarInput").addEventListener("change", function() {
-      const file = this.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          document.getElementById("avatarImg").src = e.target.result;
-        }
-        reader.readAsDataURL(file);
+    .then(response => response.json())
+    .then(data => {
+      console.log("User data:", data);
+      let avatarPath = data.avatar ? data.avatar : 'avatars/default_avatar.png';
+      if (avatarPath.startsWith('/media/')) {
+        avatarPath = avatarPath.slice(1);
       }
-    });
-    document.getElementById("saveSettingsBtn").addEventListener("click", () => {
-      const formData = new FormData();
-      const newUsername = document.getElementById("usernameInput").value;
-      formData.append("username", newUsername);
-      const avatarFile = document.getElementById("avatarInput").files[0];
-      if (avatarFile) {
-        formData.append("avatar", avatarFile);
-      }
-      fetch(`${API_BASE_URL}/api/users/update/`, {
-        method: "PATCH",
-        headers: { "Authorization": "Bearer " + token },
-        body: formData
-      })
-      .then(resp => {
-        if (!resp.ok) {
-          return resp.json().then(errData => { throw errData; });
-        }
-        return resp.json();
-      })
-      .then(updatedData => {
-        alert("Datos actualizados exitosamente.");
-        setUsername(updatedData.username);
-        renderSettingsView();
-      })
-      .catch(err => {
-        console.error("Error actualizando datos:", err);
-        alert("Error al actualizar los datos.");
+      const avatarUrl = avatarPath.startsWith('http')
+        ? avatarPath
+        : `${API_BASE_URL}/${avatarPath}`;
+
+      const contentHtml = `
+        <h2 class="mt-4">Configuración de Usuario</h2>
+        <div class="text-center my-4">
+          <img id="avatarImg" src="${avatarUrl}" alt="Avatar" style="width:150px; height:150px; border-radius:50%; cursor:pointer;">
+          <input type="file" id="avatarInput" style="display: none;" accept="image/*">
+        </div>
+        <div class="mb-3">
+          <label for="usernameInput" class="form-label">Nombre de Usuario:</label>
+          <input type="text" class="form-control" id="usernameInput" value="${data.username}">
+        </div>
+        <div class="mb-3">
+          <p>Victorias: <span id="winsCount">${data.wins ?? 0}</span></p>
+          <p>Derrotas: <span id="lossesCount">${data.losses ?? 0}</span></p>
+        </div>
+        <h4 class="mt-4">Últimas partidas</h4>
+        <div id="matchHistory" class="mb-4">Cargando historial...</div>
+        <button class="btn btn-primary" id="saveSettingsBtn">Guardar cambios</button>
+        <button class="btn btn-danger mt-2" id="deleteUserBtn">Borrar Usuario</button>
+      `;
+
+      renderLayout(contentHtml);
+
+      // Eventos de imagen y subida
+      document.getElementById("avatarImg").addEventListener("click", () => {
+        document.getElementById("avatarInput").click();
       });
-    });
-    // Botón para borrar usuario
-    document.getElementById("deleteUserBtn").addEventListener("click", () => {
-      if (confirm("¿Estás seguro de que deseas borrar tu cuenta? Esta acción no se puede deshacer.")) {
-        fetch(`${API_BASE_URL}/api/users/delete/`, {
-          method: "DELETE",
-          headers: { "Authorization": "Bearer " + token }
+      document.getElementById("avatarInput").addEventListener("change", function () {
+        const file = this.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            document.getElementById("avatarImg").src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // Guardar cambios
+      document.getElementById("saveSettingsBtn").addEventListener("click", () => {
+        const formData = new FormData();
+        const newUsername = document.getElementById("usernameInput").value;
+        formData.append("username", newUsername);
+        const avatarFile = document.getElementById("avatarInput").files[0];
+        if (avatarFile) {
+          formData.append("avatar", avatarFile);
+        }
+        fetch(`${API_BASE_URL}/api/users/update/`, {
+          method: "PATCH",
+          headers: { "Authorization": "Bearer " + token },
+          body: formData
         })
-        .then(resp => {
-          if (!resp.ok) {
-            return resp.json().then(errData => { throw errData; });
+          .then(resp => {
+            if (!resp.ok) return resp.json().then(errData => { throw errData; });
+            return resp.json();
+          })
+          .then(updatedData => {
+            alert("Datos actualizados exitosamente.");
+            setUsername(updatedData.username);
+            renderSettingsView();
+          })
+          .catch(err => {
+            console.error("Error actualizando datos:", err);
+            alert("Error al actualizar los datos.");
+          });
+      });
+
+      // Borrar cuenta
+      document.getElementById("deleteUserBtn").addEventListener("click", () => {
+        if (confirm("¿Estás seguro de que deseas borrar tu cuenta? Esta acción no se puede deshacer.")) {
+          fetch(`${API_BASE_URL}/api/users/delete/`, {
+            method: "DELETE",
+            headers: { "Authorization": "Bearer " + token }
+          })
+            .then(resp => {
+              if (!resp.ok) return resp.json().then(errData => { throw errData; });
+              return resp.json();
+            })
+            .then(() => {
+              alert("Cuenta eliminada exitosamente.");
+              logout();
+            })
+            .catch(err => {
+              console.error("Error eliminando usuario:", err);
+              alert("Error al eliminar la cuenta.");
+            });
+        }
+      });
+
+      // 🔄 Cargar historial de partidas completo con scroll
+      fetch(`${API_BASE_URL}/api/users/match_history/`, {
+        headers: { "Authorization": "Bearer " + token }
+      })
+        .then(res => res.json())
+        .then(matches => {
+          const container = document.getElementById("matchHistory");
+
+          if (!matches.length) {
+            container.innerHTML = "<p>No hay partidas registradas.</p>";
+            return;
           }
-          return resp.json();
-        })
-        .then(data => {
-          alert("Cuenta eliminada exitosamente.");
-          logout();
+
+          // Estilos para scroll y altura máxima
+          container.style.maxHeight = "300px";
+          container.style.overflowY = "auto";
+          container.style.border = "1px solid #ccc";
+          container.style.padding = "10px";
+          container.style.borderRadius = "6px";
+          container.style.backgroundColor = "#f8f9fa";
+
+          container.innerHTML = matches.map(m => `
+            <div class="card mb-2">
+              <div class="card-body p-2">
+                <strong>${m.player1}</strong> ${m.score1} - ${m.score2} <strong>${m.player2}</strong><br>
+                <small class="text-muted">Ganador: ${m.winner} | ${new Date(m.played_at).toLocaleString()}</small>
+              </div>
+            </div>
+          `).join("");
         })
         .catch(err => {
-          console.error("Error eliminando usuario:", err);
-          alert("Error al eliminar la cuenta.");
+          document.getElementById("matchHistory").innerHTML = "<p>Error al cargar el historial.</p>";
+          console.error("Historial partidas:", err);
         });
-      }
+    })
+    .catch(err => {
+      console.error("Error fetching user details:", err);
     });
-  })
-  .catch(err => {
-    console.error("Error fetching user details:", err);
-  });
 }
+
 
 
 
@@ -1061,11 +1101,13 @@ function displayGameOver(gameData) {
       winner = players.player2;
     }
   }
+  
 
   // Actualizar las estadísticas del usuario: si el usuario es ganador, suma 1 en wins;
   // de lo contrario, suma 1 en losses.
   if (getUsername() === winner) {
     updateMyStats("win");
+    saveMatchResult(players.player1, players.player2, gameData.score1, gameData.score2, winner);
   } else {
     updateMyStats("loss");
   }
@@ -1131,6 +1173,37 @@ function updateMyStats(statType) {
       console.error("❌ Error actualizando stats:", err);
     });
 }
+
+function saveMatchResult(player1, player2, score1, score2, winner) {
+  const token = getToken();
+  fetch(`${API_BASE_URL}/api/users/save_match/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      player1,
+      player2,
+      score1,
+      score2,
+      winner
+    })
+  })
+  .then(res => {
+    if (!res.ok) {
+      return res.json().then(err => { throw err; });
+    }
+    return res.json();
+  })
+  .then(data => {
+    console.log("🎮 Partida guardada:", data);
+  })
+  .catch(err => {
+    console.error("❌ Error al guardar partida:", err);
+  });
+}
+
 
 
 
