@@ -7,11 +7,22 @@
 /****************************************************
  * 1) VAR GLOBALES Y UTILIDADES: TOKEN, WS, etc.
  ****************************************************/
-let userSocket = null;  // WebSocket de usuarios online (en #home)
-let pongSocket = null;  // WebSocket de la partida (en #pong)
-let globalOnlineUsers = [];
-let currentFriendsViewContext = "chat"; // "chat" para la vista de chat, "friends" para la pestaña de friends
+
+// Si el hostname es "localhost", usamos localhost; de lo contrario, usamos el hostname actual y configuramos el puerto
+const API_BASE_URL = window.location.hostname === "localhost" 
+  ? "http://localhost:8000" 
+  : "http://" + window.location.hostname + ":8000";
+
+const WS_BASE_URL = window.location.hostname === "localhost" 
+  ? "ws://localhost:8000" 
+  : "ws://" + window.location.hostname + ":8000";
+
+let userSocket = null;      // WS para usuarios online
+let pongSocket = null;      // WS para la partida
+let globalOnlineUsers = []; // Lista global de usuarios online
+let currentFriendsViewContext = "chat"; // Contexto actual de la vista de amigos ("chat" o "friends")
 let globalBlockedUsers = [];
+let chatHistoryIntervalId = null;
 
 function getToken() {
   return localStorage.getItem("token");
@@ -143,7 +154,6 @@ function renderLayout(contentHtml) {
   `;
 }
 
-
 /****************************************************
  * 3) ARRANQUE Y ROUTER
  ****************************************************/
@@ -156,6 +166,14 @@ window.addEventListener("load", () => {
 });
 window.addEventListener("hashchange", router);
 
+function getHashQueryParam(param) {
+  const hash = window.location.hash.replace("#", "");
+  const queryIndex = hash.indexOf("?");
+  if (queryIndex < 0) return null;
+  const queryString = hash.slice(queryIndex + 1);
+  const urlParams = new URLSearchParams(queryString);
+  return urlParams.get(param);
+}
 
 function getHashQueryParams() {
   const hash = window.location.hash.replace("#", "");
@@ -251,7 +269,6 @@ function logout() {
   window.location.hash = "#login";
 }
 
-
 /****************************************************
  * 4) VISTAS DINÁMICAS (Contenido central)
  ****************************************************/
@@ -265,7 +282,6 @@ function renderHomeView() {
   `;
   renderLayout(contentHtml);
 }
-
 
 function updateFriendsList(friends, viewContext = "friends") {
   const friendsListContainer = document.getElementById("friendsListContainer");
@@ -282,7 +298,7 @@ function updateFriendsList(friends, viewContext = "friends") {
         }
         const fullAvatarUrl = avatarPath.startsWith('http')
           ? avatarPath
-          : `http://localhost:8000/media/${avatarPath}`;
+          : `${API_BASE_URL}/media/${avatarPath}`;
 
         let buttonHTML = "";
         if (viewContext === "friends") {
@@ -340,13 +356,9 @@ function updateFriendsList(friends, viewContext = "friends") {
   });
 }
 
-
-
-
-
 function blockFriend(friendName) {
   const token = getToken();
-  fetch("http://localhost:8000/api/users/block-friend/", {
+  fetch(`${API_BASE_URL}/api/users/block-friend/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -362,7 +374,9 @@ function blockFriend(friendName) {
     })
     .then(result => {
       alert(result.message);
-      renderChatView();
+      // Redirige a la vista de chat y recarga la página
+      window.location.hash = "#chat";
+      location.reload();
     })
     .catch(err => {
       console.error("Error blocking friend:", err);
@@ -370,9 +384,10 @@ function blockFriend(friendName) {
     });
 }
 
+
 function unblockFriend(friendName) {
   const token = getToken();
-  fetch("http://localhost:8000/api/users/unblock-friend/", {
+  fetch(`${API_BASE_URL}/api/users/unblock-friend/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -396,19 +411,9 @@ function unblockFriend(friendName) {
     });
 }
 
-
-
-
-
-
-
-
-
-
-
 function removeFriend(friendToRemove) {
   const token = getToken();
-  fetch("http://localhost:8000/api/users/remove-friend/", {
+  fetch(`${API_BASE_URL}/api/users/remove-friend/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -438,7 +443,7 @@ function renderFriendsView() {
   // Establecemos el contexto "friends"
   currentFriendsViewContext = "friends";
   
-  fetch("http://localhost:8000/api/users/detail/", {
+  fetch(`${API_BASE_URL}/api/users/detail/`, {
     headers: { "Authorization": "Bearer " + token }
   })
     .then(response => response.json())
@@ -471,7 +476,7 @@ function renderFriendsView() {
           alert("No te puedes agregar a ti mismo.");
           return;
         }
-        fetch("http://localhost:8000/api/users/add-friend/", {
+        fetch(`${API_BASE_URL}/api/users/add-friend/`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -501,37 +506,87 @@ function renderFriendsView() {
     });
 }
 
+/****************************************************
+ * Funciones para la Vista Chat y Chat Privado
+ ****************************************************/
+
+
+function renderChatView() {
+  const token = getToken();
+  fetch(`${API_BASE_URL}/api/users/detail/`, {
+    headers: { "Authorization": "Bearer " + token }
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log("User data:", data);
+      // Actualizamos la lista global de bloqueados (si se usa en los botones, etc.)
+      globalBlockedUsers = data.blocked_friends.map(f => f.username);
+      const contentHtml = `
+        <h2>Chat</h2>
+        <div class="row">
+          <!-- Columna Izquierda: Lista de Amigos -->
+          <div class="col-12 col-md-3">
+            <h5>Friends Online</h5>
+            <div id="friendsListContainer"></div>
+          </div>
+          <!-- Columna Derecha: Ventana del chat -->
+          <div class="col-12 col-md-9" id="chatContainer">
+            <p>Selecciona un amigo para chatear.</p>
+          </div>
+        </div>
+      `;
+      renderLayout(contentHtml);
+      // En la vista general de chat, no queremos que esté activo el intervalo del historial de chat privado
+      if (chatHistoryIntervalId) {
+        clearInterval(chatHistoryIntervalId);
+        chatHistoryIntervalId = null;
+      }
+      currentFriendsViewContext = "chat";
+      updateFriendsList(data.friends, "chat");
+    })
+    .catch(err => {
+      console.error("Error fetching user details:", err);
+      alert("Error al obtener datos del usuario.");
+    });
+}
+
 function renderPrivateChatView(friendUsername) {
   const token = getToken();
-  
-  // Construimos el HTML del panel de chat
-  const contentHtml = `
+  // Define el HTML de la ventana de chat privado
+  const chatHtml = `
     <h2>Chat con ${friendUsername}</h2>
     <div id="chatHistory" style="border:1px solid #ccc; height:400px; overflow-y:scroll; padding:10px; background:#fff;">
-      <!-- Aquí se inyectará el historial de mensajes -->
+      <!-- Historial de mensajes -->
     </div>
     <div style="margin-top:10px;">
       <input type="text" id="chatMessageInput" class="form-control" placeholder="Escribe tu mensaje">
       <button id="sendChatMessageBtn" class="btn btn-primary mt-2">Enviar</button>
     </div>
   `;
+  // Sólo actualizamos la columna derecha, dejando intacta la lista de amigos (columna izquierda)
+  const chatContainer = document.getElementById("chatContainer");
+  if (chatContainer) {
+    chatContainer.innerHTML = chatHtml;
+  }
+  // Si ya existe un interval para el historial de chat privado, lo limpiamos
+  if (chatHistoryIntervalId) {
+    clearInterval(chatHistoryIntervalId);
+    chatHistoryIntervalId = null;
+  }
   
-  // Suponiendo que tu función renderLayout coloca el contenido en el panel derecho
-  renderLayout(contentHtml);
-  
-  // Función para cargar el historial de mensajes
+  // Función para cargar el historial de chat
   function loadChatHistory() {
-    fetch(`http://localhost:8000/api/chat/conversation/?friend=${friendUsername}`, {
+    fetch(`${API_BASE_URL}/api/chat/conversation/?friend=${friendUsername}`, {
       headers: { "Authorization": "Bearer " + token }
     })
       .then(response => response.json())
       .then(data => {
         const chatHistoryDiv = document.getElementById("chatHistory");
         if (data.messages && data.messages.length > 0) {
+          // Mostramos cada mensaje sin fecha
           chatHistoryDiv.innerHTML = data.messages.map(msg => {
             return `<div style="margin-bottom:5px;">
-                      <strong>${msg.sender}:</strong> ${msg.text} 
-                      <span style="font-size:0.8em; color:#666;">${msg.timestamp}</span>
+                      <strong>${msg.sender}:</strong> ${msg.text}
                     </div>`;
           }).join("");
         } else {
@@ -543,14 +598,17 @@ function renderPrivateChatView(friendUsername) {
       .catch(err => console.error("Error loading chat history:", err));
   }
   
-  // Cargar el historial al iniciar
+  // Cargar el historial de chat inmediatamente
   loadChatHistory();
   
-  // Evento para enviar un mensaje
+  // Iniciar el polling del historial de chat cada 1 segundo y guardar el ID del interval
+  chatHistoryIntervalId = setInterval(loadChatHistory, 1000);
+  
+  // Evento para enviar mensaje
   document.getElementById("sendChatMessageBtn").addEventListener("click", () => {
     const messageText = document.getElementById("chatMessageInput").value.trim();
     if (!messageText) return;
-    fetch("http://localhost:8000/api/chat/send/", {
+    fetch(`${API_BASE_URL}/api/chat/send/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -561,26 +619,18 @@ function renderPrivateChatView(friendUsername) {
       .then(response => response.json())
       .then(data => {
         document.getElementById("chatMessageInput").value = "";
-        loadChatHistory(); // Recargar el historial tras enviar el mensaje
+        loadChatHistory(); // Recargar historial tras enviar mensaje
       })
       .catch(err => console.error("Error sending message:", err));
   });
-  
-  // (Opcional) Polling para actualizar el historial en tiempo real cada 1 segundos
-  setInterval(loadChatHistory, 1000);
 }
-
-
-
-
-
 
 
 
 // Vista Settings
 function renderSettingsView() {
   const token = getToken();
-  fetch("http://localhost:8000/api/users/detail/", {
+  fetch(`${API_BASE_URL}/api/users/detail/`, {
     headers: { "Authorization": "Bearer " + token }
   })
   .then(response => response.json())
@@ -592,7 +642,7 @@ function renderSettingsView() {
     }
     const avatarUrl = avatarPath.startsWith('http')
       ? avatarPath
-      : `http://localhost:8000/${avatarPath}`;
+      : `${API_BASE_URL}/${avatarPath}`;
     const contentHtml = `
       <h2 class="mt-4">Configuración de Usuario</h2>
       <div class="text-center my-4">
@@ -632,7 +682,7 @@ function renderSettingsView() {
       if (avatarFile) {
         formData.append("avatar", avatarFile);
       }
-      fetch("http://localhost:8000/api/users/update/", {
+      fetch(`${API_BASE_URL}/api/users/update/`, {
         method: "PATCH",
         headers: { "Authorization": "Bearer " + token },
         body: formData
@@ -656,7 +706,7 @@ function renderSettingsView() {
     // Botón para borrar usuario
     document.getElementById("deleteUserBtn").addEventListener("click", () => {
       if (confirm("¿Estás seguro de que deseas borrar tu cuenta? Esta acción no se puede deshacer.")) {
-        fetch("http://localhost:8000/api/users/delete/", {
+        fetch(`${API_BASE_URL}/api/users/delete/`, {
           method: "DELETE",
           headers: { "Authorization": "Bearer " + token }
         })
@@ -681,48 +731,6 @@ function renderSettingsView() {
     console.error("Error fetching user details:", err);
   });
 }
-
-
-// Vista Chat
-function renderChatView() {
-  const token = getToken();
-  fetch("http://localhost:8000/api/users/detail/", {
-    headers: { "Authorization": "Bearer " + token }
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log("User data:", data);
-      // Actualiza la variable global de bloqueados (suponiendo que data.blocked_friends es un array de objetos con username)
-      globalBlockedUsers = data.blocked_friends.map(f => f.username);
-      
-      const contentHtml = `
-        <h2>Chat</h2>
-        <div class="row">
-          <div class="col-12 col-md-3">
-            <h5>Friends Online</h5>
-            <div id="friendsListContainer">
-              <!-- Aquí se inyectará la lista de amigos -->
-            </div>
-          </div>
-          <div class="col-12 col-md-9">
-            <p>Bienvenido al chat. Selecciona un amigo para chatear.</p>
-          </div>
-        </div>
-      `;
-      renderLayout(contentHtml);
-      // Establece el contexto "chat" para que se muestren los botones correspondientes:
-      currentFriendsViewContext = "chat";
-      updateFriendsList(data.friends, "chat");
-    })
-    .catch(err => {
-      console.error("Error fetching user details:", err);
-      alert("Error al obtener datos del usuario.");
-    });
-}
-
-
-
-
 
 
 
@@ -773,7 +781,7 @@ function renderLoginView() {
     const username = document.getElementById("username").value;
     const password = document.getElementById("password").value;
     try {
-      const resp = await fetch("http://localhost:8000/api/users/login/", {
+      const resp = await fetch(`${API_BASE_URL}/api/users/login/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
@@ -828,7 +836,7 @@ function renderRegisterView() {
     const username = document.getElementById("username").value;
     const password = document.getElementById("password").value;
     try {
-      const resp = await fetch("http://localhost:8000/api/users/register/", {
+      const resp = await fetch(`${API_BASE_URL}/api/users/register/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
@@ -890,7 +898,7 @@ function initUsersWebSocket() {
   const token = getToken();
   const currentUser = getUsername();
   if (!token || !currentUser) return;
-  const wsUrl = `ws://localhost:8000/ws/online_users/?token=${token}`;
+  const wsUrl = `${WS_BASE_URL}/ws/online_users/?token=${token}`;
   console.log("Abriendo userSocket:", wsUrl);
   userSocket = new WebSocket(wsUrl);
   userSocket.onopen = () => console.log("userSocket abierto");
@@ -928,10 +936,10 @@ function initUsersWebSocket() {
     }
   };
 
-function pollFriendsList() {
+  function pollFriendsList() {
     console.log("Ejecutando pollFriendsList...");
     const token = getToken();
-    fetch("http://localhost:8000/api/users/detail/", {
+    fetch(`${API_BASE_URL}/api/users/detail/`, {
       headers: { "Authorization": "Bearer " + token }
     })
       .then(response => response.json())
@@ -954,9 +962,6 @@ function pollFriendsList() {
   }
   
   setInterval(pollFriendsList, 1000);
-  
-  
-  
 }
 
 function updateUsersList(users, currentUser) {

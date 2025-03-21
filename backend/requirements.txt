@@ -9,3 +9,4 @@ gunicorn
 Pillow
 djangorestframework-simplejwt
 users
+django-cors-headers

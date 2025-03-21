@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import logging
 from datetime import timedelta
+import socket
 
 # Configurar logging
 logging.basicConfig(level=logging.DEBUG)
@@ -21,8 +22,11 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-l9c*b*f+%27esc40y_%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 
+HOST_IP = os.getenv("HOST_IP", "localhost")
+
 # Se agregan 'localhost' y '127.0.0.1' para evitar problemas en Docker
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost 127.0.0.1').split()
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", HOST_IP]
+
 
 # Modelo de usuario personalizado
 AUTH_USER_MODEL = 'users.CustomUser'
@@ -73,10 +77,16 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://{HOST_IP}:3000",
+    "http://192.168.1.156:3000",
+
 ]
+
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://{HOST_IP}:3000",
+    "http://192.168.1.156:3000",
 ]
 CSRF_COOKIE_SECURE = False
 SESSION_COOKIE_SECURE = False
