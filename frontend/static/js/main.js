@@ -774,11 +774,310 @@ function renderSettingsView() {
 
 
 
-// Vistas de Juego (IA, Local, Online) - Placeholders
+// -------------------------------
+// VISTA DE JUEGO CONTRA IA
+// -------------------------------
 function renderGameIaView() {
-  const contentHtml = `<h2>Juego: IA</h2><p>Contenido para juego contra IA.</p>`;
+  // 1) Cerrar websocket de Pong si estaba abierto
+  closePongWS();
+
+  // 2) Generar layout + canvas en el DOM
+  const contentHtml = `
+    <div class="text-center">
+      <h2>Pong vs IA</h2>
+      <canvas id="gameCanvasIa" width="800" height="400"></canvas>
+      <div class="mt-2 d-flex justify-content-between" style="max-width: 800px; margin: 0 auto;">
+        <div id="iaLeftScore">0</div>
+        <div id="iaRightScore">0</div>
+      </div>
+      <p id="iaCountdown" style="font-size:1.5rem; margin-top:10px;"></p>
+    </div>
+  `;
   renderLayout(contentHtml);
+
+  // 3) Variables globales para la partida
+  window.iaGameOver = false;
+  window.iaPaddleLeft = 50;
+  window.iaPaddleRight = 50; 
+  window.iaBallPos = { x: 50, y: 50 };
+
+  // 4) Generamos un roomId aleatorio (o puedes usar algo fijo)
+  const randomRoomId = Math.floor(Math.random() * 10000);
+
+  // 5) Inicializar WebSocket y el loop de dibujo
+  initPongAiWebSocket(randomRoomId);
+  initPongAiCanvasLoop();
+
+  // 6) Cuenta atrás
+  startIaCountdown(randomRoomId);
 }
+
+/**
+ * Inicializa el WebSocket para el modo IA.
+ */
+function initPongAiWebSocket(roomId) {
+  const token = getToken();
+  if (!token) {
+    window.location.hash = "#login";
+    return;
+  }
+
+  const wsUrl = `${WS_BASE_URL}/ws/pong_ai/${roomId}/?token=${token}`;
+  console.log("Abriendo WS IA:", wsUrl);
+  pongSocket = new WebSocket(wsUrl);
+
+  pongSocket.onopen = () => console.log("WS Pong IA abierto");
+  pongSocket.onclose = (e) => console.log("WS Pong IA cerrado", e);
+
+  pongSocket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+
+      if (data.type === "initial_state") {
+        // Estado inicial: centro de palas y pos. pelota
+        iaPaddleLeft = data.paddle_left;
+        iaPaddleRight = data.paddle_right;
+        iaBallPos.x = data.ball_x;
+        iaBallPos.y = data.ball_y;
+      }
+      else if (data.type === "update_paddle") {
+        // Actualiza UNA de las palas
+        if (data.paddle === "left") {
+          iaPaddleLeft = data.position;
+        } else {
+          iaPaddleRight = data.position;
+        }
+      }
+      else if (data.type === "game_update") {
+        // Actualiza pelota, marcador y palas si vienen en data
+        if (data.ball_x !== undefined) iaBallPos.x = data.ball_x;
+        if (data.ball_y !== undefined) iaBallPos.y = data.ball_y;
+        if (data.score_left !== undefined && data.score_right !== undefined) {
+          updateIaScore(data.score_left, data.score_right);
+        }
+        if (data.paddle_left !== undefined) iaPaddleLeft = data.paddle_left;
+        if (data.paddle_right !== undefined) iaPaddleRight = data.paddle_right;
+      }
+      else if (data.type === "game_over") {
+        iaGameOver = true;
+        displayIaGameOver(data);
+      }
+
+    } catch (err) {
+      console.error("Error parse WS IA:", err);
+    }
+  };
+
+  // Escuchamos keydown y keyup para enviar "paddle_input"
+  document.addEventListener("keydown", onPongIaKeyDown);
+  document.addEventListener("keyup", onPongIaKeyUp);
+}
+
+/**
+ * Envía "start_game" al servidor de forma “segura”, 
+ * esperando a que el socket esté en OPEN si hace falta.
+ */
+function safeSendStartGame(roomId) {
+  if (!pongSocket) return;
+
+  if (pongSocket.readyState === WebSocket.OPEN) {
+    console.log("Enviando start_game al servidor IA...");
+    pongSocket.send(JSON.stringify({ type: "start_game", room: roomId }));
+  } else {
+    // Aún conectando => reintentamos en 100ms
+    console.log("Socket IA no listo, reintento en 100ms...");
+    setTimeout(() => safeSendStartGame(roomId), 100);
+  }
+}
+
+/**
+ * Inicia la cuenta atrás y al finalizar envía "start_game" 
+ * usando la función de envío seguro para evitar errores de CONNECTING.
+ */
+function startIaCountdown(roomId) {
+  let count = 3;
+  const cdEl = document.getElementById("iaCountdown");
+  cdEl.textContent = count;
+
+  const intervalId = setInterval(() => {
+    count--;
+    if (count > 0) {
+      cdEl.textContent = count;
+    } else {
+      cdEl.textContent = "¡GO!";
+      clearInterval(intervalId);
+      setTimeout(() => {
+        cdEl.textContent = "";
+        // Llamamos a safeSendStartGame
+        safeSendStartGame(roomId);
+      }, 500);
+    }
+  }, 1000);
+}
+
+/**
+ * Maneja keydown: si flecha arriba => speed=-3, abajo => speed=+3
+ * Enviamos "paddle_input" al servidor.
+ */
+function onPongIaKeyDown(e) {
+  if (iaGameOver) return;
+
+  let speed = 0;
+  if (e.key === "ArrowUp" || e.key === "w") {
+    speed = -3; // subir
+  } else if (e.key === "ArrowDown" || e.key === "s") {
+    speed = 3;  // bajar
+  }
+
+  if (speed !== 0) {
+    sendPaddleSpeed(speed);
+  }
+}
+
+/**
+ * Maneja keyup: si suelto flecha arriba/abajo => speed=0
+ */
+function onPongIaKeyUp(e) {
+  if (iaGameOver) return;
+
+  if (
+    e.key === "ArrowUp" ||
+    e.key === "ArrowDown" ||
+    e.key === "w" ||
+    e.key === "s"
+  ) {
+    sendPaddleSpeed(0);
+  }
+}
+
+/**
+ * Envía la velocidad deseada para la pala izquierda.
+ */
+function sendPaddleSpeed(speedValue) {
+  if (!pongSocket) return;
+  pongSocket.send(JSON.stringify({
+    type: "paddle_input",
+    speed: speedValue
+  }));
+}
+
+/**
+ * Bucle de dibujado en el canvas. 
+ * Dado que en el backend la pala se maneja con "centro" en [0..100],
+ * dibujamos restando la mitad de la altura.
+ */
+function initPongAiCanvasLoop() {
+  const canvas = document.getElementById("gameCanvasIa");
+  const ctx = canvas.getContext("2d");
+
+  const cw = canvas.width;
+  const ch = canvas.height;
+
+  const paddleWidth = 10;
+  const paddleHeight = 80; // en píxeles (aprox. 20% de 400)
+
+  const ballRadius = 10;
+
+  function drawFrame() {
+    ctx.clearRect(0, 0, cw, ch);
+
+    // Fondo
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cw, ch);
+
+    // Pala izquierda (jugador)
+    const p1CenterY = (iaPaddleLeft / 100) * ch;
+    const p1TopY = p1CenterY - paddleHeight / 2;
+    const p1x = 0.05 * cw;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(p1x, p1TopY, paddleWidth, paddleHeight);
+
+    // Pala derecha (IA)
+    const p2CenterY = (iaPaddleRight / 100) * ch;
+    const p2TopY = p2CenterY - paddleHeight / 2;
+    const p2x = 0.95 * cw - paddleWidth;
+    ctx.fillRect(p2x, p2TopY, paddleWidth, paddleHeight);
+
+    // Bola
+    const bx = (iaBallPos.x / 100) * cw;
+    const by = (iaBallPos.y / 100) * ch;
+    ctx.beginPath();
+    ctx.arc(bx, by, ballRadius, 0, 2 * Math.PI);
+    ctx.fill();
+
+    if (!iaGameOver) {
+      requestAnimationFrame(drawFrame);
+    }
+  }
+
+  drawFrame(); // Iniciar animación
+}
+
+/**
+ * Actualizar marcador en pantalla
+ */
+function updateIaScore(scoreLeft, scoreRight) {
+  const leftScoreEl = document.getElementById("iaLeftScore");
+  const rightScoreEl = document.getElementById("iaRightScore");
+  if (leftScoreEl) leftScoreEl.textContent = scoreLeft;
+  if (rightScoreEl) rightScoreEl.textContent = scoreRight;
+}
+
+/**
+ * Mostrar overlay al terminar la partida
+ */
+function displayIaGameOver(data) {
+  iaGameOver = true;
+
+  document.removeEventListener("keydown", onPongIaKeyDown);
+  document.removeEventListener("keyup", onPongIaKeyUp);
+
+  const winner = data.winner || "Desconocido";
+  const scoreLeft = data.score_left ?? 0;
+  const scoreRight = data.score_right ?? 0;
+  const userIsWinner = (getUsername() === winner);
+
+  let resultMessage = userIsWinner ? "¡Has ganado!" : "Has perdido";
+
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100%";
+  overlay.style.height = "100%";
+  overlay.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+  overlay.style.display = "flex";
+  overlay.style.flexDirection = "column";
+  overlay.style.justifyContent = "center";
+  overlay.style.alignItems = "center";
+  overlay.style.zIndex = 9999;
+
+  const h2 = document.createElement("h2");
+  h2.style.color = "#fff";
+  h2.textContent = resultMessage;
+  overlay.appendChild(h2);
+
+  const p = document.createElement("p");
+  p.style.color = "#fff";
+  p.style.fontSize = "24px";
+  p.textContent = `Ganador: ${winner} | ${scoreLeft} - ${scoreRight}`;
+  overlay.appendChild(p);
+
+  const btn = document.createElement("button");
+  btn.className = "btn btn-primary mt-3";
+  btn.textContent = "Volver al Home";
+  btn.onclick = () => {
+    document.body.removeChild(overlay);
+    window.location.hash = "#home";
+  };
+  overlay.appendChild(btn);
+
+  document.body.appendChild(overlay);
+}
+
+
+
+
 function renderGameLocalView() {
   const contentHtml = `<h2>Juego: Local</h2><p>Contenido para juego local.</p>`;
   renderLayout(contentHtml);
@@ -1253,6 +1552,22 @@ function initUsersWebSocket() {
     }
   };
 
+  function updateUsersList(users, currentUser) {
+    const ul = document.getElementById("usersList");
+    if (!ul) return;
+    ul.innerHTML = "";
+    users.forEach((u) => {
+      const li = document.createElement("li");
+      li.className = "nav-item py-1";
+      li.textContent = (u === currentUser) ? `${u} (tú)` : u;
+      if (u !== currentUser) {
+        li.style.cursor = "pointer";
+        li.addEventListener("click", () => inviteUser(u, currentUser));
+      }
+      ul.appendChild(li);
+    });
+  }
+
   function pollFriendsList() {
     console.log("Ejecutando pollFriendsList...");
     const token = getToken();
@@ -1279,22 +1594,6 @@ function initUsersWebSocket() {
   }
   
   setInterval(pollFriendsList, 1000);
-}
-
-function updateUsersList(users, currentUser) {
-  const ul = document.getElementById("usersList");
-  if (!ul) return;
-  ul.innerHTML = "";
-  users.forEach((u) => {
-    const li = document.createElement("li");
-    li.className = "nav-item py-1";
-    li.textContent = (u === currentUser) ? `${u} (tú)` : u;
-    if (u !== currentUser) {
-      li.style.cursor = "pointer";
-      li.addEventListener("click", () => inviteUser(u, currentUser));
-    }
-    ul.appendChild(li);
-  });
 }
 
 function inviteUser(toUser, fromUser) {
@@ -1329,13 +1628,22 @@ btnInviteCancel.addEventListener("click", function() {
 });
 
 function showInvitationReceived(inviteData) {
+  // Comprobar si el remitente está bloqueado
+  if (globalBlockedUsers.includes(inviteData.from)) {
+    console.log(`⚠️ Invitación bloqueada de ${inviteData.from}`);
+    return; // Ignorar invitación
+  }
+
+  // Mostrar modal si no está bloqueado
   document.getElementById("inviteResponseModalTitle").textContent = "Invitación recibida";
   document.getElementById("inviteResponseModalBody").textContent =
     `${inviteData.from} te ha invitado a jugar Pong. ¿Aceptas?`;
   window.inviteFromUser = inviteData.from;
+
   const modal = new bootstrap.Modal(document.getElementById("inviteResponseModal"));
   modal.show();
 }
+
 
 const btnAcceptInvite = document.getElementById("btnAcceptInvite");
 btnAcceptInvite.addEventListener("click", function() {

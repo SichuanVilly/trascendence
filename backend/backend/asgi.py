@@ -17,9 +17,10 @@ from backend.jwt_middleware import JWTAuthMiddleware
 # 4) Importa tus rutas WebSocket
 from users.routing import websocket_urlpatterns as users_ws
 from pong.routing import websocket_urlpatterns as pong_ws
+from pong.routing_ai import websocket_urlpatterns as pong_ai_ws
 
 # 5) Combina las rutas de "users" y "pong"
-websocket_patterns = users_ws + pong_ws
+websocket_patterns = users_ws + pong_ws + pong_ai_ws
 
 # 6) Configura logging (opcional)
 logging.basicConfig(level=logging.DEBUG)
