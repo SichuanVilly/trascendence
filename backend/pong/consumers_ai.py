@@ -9,7 +9,8 @@ logging.basicConfig(level=logging.DEBUG)
 class PongAIGameConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         """
-        Acepta la conexión si el usuario está autenticado (elimínalo si no deseas auth).
+        Acepta la conexión solo si el usuario está autenticado.
+        (Si no deseas auth, elimina el check.)
         """
         self.room_id = self.scope["url_route"]["kwargs"]["room_id"]
         self.room_group_name = f"pong_ai_{self.room_id}"
@@ -19,7 +20,6 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # Unir el canal al grupo
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
@@ -28,34 +28,28 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
         # ----------------------------------------------
         self.PADDLE_HEIGHT = 20
         self.PADDLE_HALF = self.PADDLE_HEIGHT / 2.0
+        self.MAX_SPEED_PER_FRAME = 2  # Velocidad con la que la IA se acerca a su "target"
 
-        # Velocidad máxima de la pala por frame (~60 FPS).
-        # Este valor define la rapidez con la que la pala
-        # puede acercarse a su objetivo en el bucle principal.
-        self.MAX_SPEED_PER_FRAME = 2
+        # Donde la IA quiere colocar su pala derecha (centro)
+        self.ai_target = 50  
 
-        # Posiciones iniciales (centro) de las palas
-        self.paddle_left = 50   # Jugador humano
-        self.paddle_right = 50  # IA
-
-        # Velocidades actuales
+        # Palas
+        self.paddle_left = 50
+        self.paddle_right = 50
         self.paddle_left_speed = 0
         self.paddle_right_speed = 0
-
-        # **Objetivo** de la pala derecha, donde la IA quiere parar
-        self.ai_target = 50  # Al inicio está en 50
 
         # Pelota
         self.ball_x = 50
         self.ball_y = 50
-        self.ball_vx = 0
-        self.ball_vy = 0
+        self.initial_vx = -1.0
+        self.initial_vy = 0.7
 
         # Marcador
         self.score_left = 0
         self.score_right = 0
 
-        # Tareas asíncronas
+        # Tareas
         self.ai_task = None
         self.game_task = None
 
@@ -64,7 +58,7 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         """
-        Cancelar tareas y abandonar el grupo.
+        Cancelamos tareas y abandonamos el grupo.
         """
         if self.ai_task:
             self.ai_task.cancel()
@@ -76,9 +70,9 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         """
-        Mensajes del frontend:
+        Mensajes JSON desde el frontend:
          - "paddle_input": speed => Jugador humano
-         - "start_game" => Inicia IA + bucle ~60 FPS
+         - "start_game": iniciar IA + bucle ~60 FPS
         """
         try:
             data = json.loads(text_data)
@@ -96,7 +90,6 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
     async def handle_paddle_input_left(self, data):
         """
         Ajusta la velocidad de la pala IZQUIERDA (jugador humano).
-        data: {"speed": ±N}
         """
         speed = float(data.get("speed", 0))
         self.paddle_left_speed = speed
@@ -104,57 +97,64 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
 
     async def start_game(self):
         """
-        Cuando llega {type:"start_game"} => inicia la IA (cada 1s) y el bucle ~60 FPS.
+        {type:"start_game"} => inicia la IA y el bucle principal
         """
         logging.debug("⏯ start_game recibido => Iniciando IA + bucle principal")
 
         if not self.ai_task:
-            # Iniciar la IA loop (cada 1 segundo actualiza self.ai_target)
             self.ai_task = asyncio.create_task(self.ai_loop())
 
         if not self.game_task:
-            # Pelota a la izquierda
-            self.ball_vx = -1.0
-            self.ball_vy = 0.7
+            self.ball_vx = self.initial_vx
+            self.ball_vy = self.initial_vy
             self.game_task = asyncio.create_task(self.game_loop())
 
     # ======================================================
-    #   IA loop => actualiza "ai_target" una vez por segundo
+    #   IA loop => actualiza ai_target cada 1 seg
     # ======================================================
     async def ai_loop(self):
         """
-        Cada 1 segundo, la IA predice dónde estará la pelota
-        y elige un "ai_target" (centro de su pala) donde quiere
-        "parar" en x=95.
+        Cada 1 segundo, la IA predice la trayectoria
+        y decide a dónde colocar la pala derecha.
+        Con 1/5 de probabilidad “falla” y elige
+        un objetivo aleatorio.
         """
         try:
             while True:
                 await asyncio.sleep(1.0)
 
-                predicted = self.predict_ball_y_assuming_rebound()
-                if predicted is not None:
-                    # Pequeño error para que no sea perfecta
-                    error = random.uniform(-3, 3)
-                    self.ai_target = predicted + error
+                # 1) 1/10 chance de fallar
+                chance = random.random()  # Valor en [0..1)
+                if chance < 0.1:
+                    # IA se equivoca: objetivo aleatorio en [0..100]
+                    # De este modo a veces no ataja la pelota
+                    self.ai_target = random.uniform(0, 100)
+                    logging.debug(f"🤖 IA => HA FALLADO INTENCIONALMENTE. target={self.ai_target:.2f}")
                 else:
-                    # Si no habrá rebote en x=95 => se queda quieta en su posición actual
-                    self.ai_target = self.paddle_right
+                    # IA se comporta normal => predice la trayectoria
+                    predicted = self.predict_ball_y_assuming_rebound()
+                    if predicted is not None:
+                        error = random.uniform(-3, 3)
+                        self.ai_target = predicted + error
+                    else:
+                        self.ai_target = self.paddle_right
+                    logging.debug(f"🤖 IA => target={self.ai_target:.2f}")
 
-                logging.debug(f"🤖 IA => ai_target={self.ai_target:.2f}")
         except asyncio.CancelledError:
             logging.debug("🚫 ai_loop cancelado (socket cerrado).")
 
     def predict_ball_y_assuming_rebound(self):
         """
-        Simula la pelota: si vx<0, rebota en x=5, luego va a x=95.
-        Retorna la Y final. None si se vuelve a la izquierda.
+        Si vx<0 => la pelota va a x=5, rebota,
+        luego vx>0 => va a x=95. 
+        Devuelve Y final o None si se vuelve a la izquierda antes.
         """
         sim_x = self.ball_x
         sim_y = self.ball_y
         vx = self.ball_vx
         vy = self.ball_vy
 
-        # Fase 1: si va a la izquierda => simular hasta x=5
+        # Fase 1: si vx<0 => simulamos hasta x=5
         if vx < 0:
             while sim_x > 5:
                 sim_x += vx
@@ -167,7 +167,7 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
                     vy = -vy
             vx = abs(vx)
 
-        # Fase 2: con vx>0 => x=95
+        # Fase 2: ahora vx>0 => hasta x=95
         while sim_x < 95:
             sim_x += vx
             sim_y += vy
@@ -180,7 +180,6 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
 
             if vx < 0:
                 return None
-
         return sim_y
 
     # ======================================================
@@ -193,56 +192,51 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
         try:
             max_score = 5
             while True:
-                # 1) Mover pelota
+                # Mover pelota
                 self.ball_x += self.ball_vx
                 self.ball_y += self.ball_vy
 
-                # 2) Mover pala izquierda según su speed
+                # Mover pala izquierda
                 self.paddle_left += self.paddle_left_speed
                 self.paddle_left = max(self.PADDLE_HALF, min(100 - self.PADDLE_HALF, self.paddle_left))
 
-                # 3) Mover pala derecha hacia ai_target, con velocidad limitada
+                # Pala derecha => se acerca a ai_target
                 dist = self.ai_target - self.paddle_right
-                # Si la distancia es pequeña, paramos
                 if abs(dist) < 0.5:
                     self.paddle_right = self.ai_target
                 else:
-                    # Ajustar la velocidad en [−MAX_SPEED_PER_FRAME, +MAX_SPEED_PER_FRAME]
                     move = max(min(dist, self.MAX_SPEED_PER_FRAME), -self.MAX_SPEED_PER_FRAME)
                     self.paddle_right += move
 
-                # Limitar a [PADDLE_HALF, 100 - PADDLE_HALF]
                 self.paddle_right = max(self.PADDLE_HALF, min(100 - self.PADDLE_HALF, self.paddle_right))
 
-                # 4) Rebotes verticales
+                # Rebotes verticales
                 if self.ball_y <= 0 or self.ball_y >= 100:
                     self.ball_vy *= -1
 
-                # 5) Gol a la derecha
+                # Gol a la derecha
                 if self.ball_x <= 0:
                     self.score_right += 1
                     self.reset_ball(right_side=True)
 
-                # 6) Gol a la izquierda
+                # Gol a la izquierda
                 if self.ball_x >= 100:
                     self.score_left += 1
                     self.reset_ball(right_side=False)
 
-                # 7) Colisión con pala izquierda
+                # Colisión con pala izquierda
                 if self.ball_x < 5:
-                    min_left = self.paddle_left - self.PADDLE_HALF
-                    max_left = self.paddle_left + self.PADDLE_HALF
-                    if min_left < self.ball_y < max_left:
+                    if self.check_paddle_collision(self.paddle_left):
                         self.ball_vx *= -1
+                        self.speed_up_ball()
 
-                # 8) Colisión con pala derecha
+                # Colisión con pala derecha
                 if self.ball_x > 95:
-                    min_right = self.paddle_right - self.PADDLE_HALF
-                    max_right = self.paddle_right + self.PADDLE_HALF
-                    if min_right < self.ball_y < max_right:
+                    if self.check_paddle_collision(self.paddle_right):
                         self.ball_vx *= -1
+                        self.speed_up_ball()
 
-                # 9) Difundir "game_update"
+                # Emitir "game_update"
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -259,7 +253,7 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
-                # 10) ¿Alguien llegó a 5?
+                # Fin de partida
                 if self.score_left >= max_score or self.score_right >= max_score:
                     winner = self.user.username if (self.score_left > self.score_right) else "La IA"
                     await self.channel_layer.group_send(
@@ -280,13 +274,42 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
         except asyncio.CancelledError:
             logging.debug("🚫 game_loop cancelado (socket cerrado).")
 
+    def check_paddle_collision(self, paddle_center):
+        """
+        Retorna True si la pelota colisiona con la pala (paddle_center).
+        """
+        min_paddle = paddle_center - self.PADDLE_HALF
+        max_paddle = paddle_center + self.PADDLE_HALF
+        return (min_paddle < self.ball_y < max_paddle)
+
+    def speed_up_ball(self):
+        """
+        Aumenta la velocidad de la pelota (vx, vy) en ±0.01 
+        según su dirección actual.
+        """
+        increment = 0.01
+        # Ajustar vx
+        if self.ball_vx > 0:
+            self.ball_vx += increment
+        else:
+            self.ball_vx -= increment
+        # Ajustar vy
+        if self.ball_vy > 0:
+            self.ball_vy += increment
+        else:
+            self.ball_vy -= increment
+
+        logging.debug(f"⚡ Ball speed up => vx={self.ball_vx:.2f}, vy={self.ball_vy:.2f}")
+
     def reset_ball(self, right_side=True):
         """
-        Resetea pelota a (50,50). 
-        Si right_side=True => sale moviéndose a la derecha.
+        Resetea la pelota y la velocidad al anotar un punto.
         """
         self.ball_x = 50
         self.ball_y = 50
+        self.ball_vx = self.initial_vx
+        self.ball_vy = self.initial_vy
+
         if right_side:
             self.ball_vx = abs(self.ball_vx)
         else:
@@ -297,8 +320,8 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
     # ======================================================
     async def update_paddle(self, event):
         """
-        Si en algún momento enviamos 'update_paddle' al grupo,
-        se reenvía al front aquí.
+        (Opcional) si se manda un "update_paddle" vía group_send,
+        se reenvía aquí al front.
         """
         which_paddle = event["which"]
         position = event["position"]
@@ -310,14 +333,14 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
 
     async def game_update(self, event):
         """
-        Reenviar 'game_update' al front.
+        Reenvía 'game_update' al front.
         """
         data = event["data"]
         await self.send(text_data=json.dumps(data))
 
     async def game_over(self, event):
         """
-        Notifica 'game_over' y cancela tareas IA + loop.
+        Notifica el final de la partida.
         """
         data = event["data"]
         if self.ai_task:
@@ -328,7 +351,7 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
 
     async def send_initial_state(self):
         """
-        Envía estado inicial (pelota, palas, marcador).
+        Envía el estado inicial.
         """
         await self.send(text_data=json.dumps({
             "type": "initial_state",
