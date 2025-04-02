@@ -18,16 +18,16 @@ class LocalPongGameConsumer(AsyncWebsocketConsumer):
         # Estado del juego (en porcentajes, 0-100)
         self.PADDLE_HEIGHT = 20            # Altura de la pala en %
         self.PADDLE_HALF = self.PADDLE_HEIGHT / 2.0
-        self.paddle_left = 50             # Centro vertical de la pala izquierda
-        self.paddle_right = 50            # Centro vertical de la pala derecha
-        self.paddle_left_speed = 0        # Velocidad en % por frame
+        self.paddle_left = 50              # Centro vertical de la pala izquierda
+        self.paddle_right = 50             # Centro vertical de la pala derecha
+        self.paddle_left_speed = 0         # Velocidad en % por frame
         self.paddle_right_speed = 0
         
         # Estado de la pelota (en %)
         self.ball_x = 50
         self.ball_y = 50
-        self.ball_vx = 1.0                # Velocidad horizontal
-        self.ball_vy = 1.0                # Velocidad vertical
+        self.ball_vx = 1.0                 # Velocidad horizontal
+        self.ball_vy = 1.0                 # Velocidad vertical
         
         # Marcadores
         self.score_left = 0
@@ -106,7 +106,7 @@ class LocalPongGameConsumer(AsyncWebsocketConsumer):
                 if self.ball_y <= 0 or self.ball_y >= 100:
                     self.ball_vy *= -1
                 
-                # Primero, chequea si la pelota ha pasado la zona de anotación
+                # Comprueba si la pelota ha pasado la zona de anotación
                 if self.ball_x - ball_radius <= score_threshold_left:
                     self.score_right += 1
                     self.reset_ball()
@@ -119,11 +119,13 @@ class LocalPongGameConsumer(AsyncWebsocketConsumer):
                         if abs(self.ball_y - self.paddle_left) <= self.PADDLE_HALF:
                             self.ball_vx = abs(self.ball_vx)
                             self.ball_x = left_paddle_right + ball_radius
+                            self.increase_ball_speed()  # Aumenta velocidad al chocar
                     # Chequea colisión con la pala derecha
                     if self.ball_x + ball_radius >= right_paddle_left:
                         if abs(self.ball_y - self.paddle_right) <= self.PADDLE_HALF:
                             self.ball_vx = -abs(self.ball_vx)
                             self.ball_x = right_paddle_left - ball_radius
+                            self.increase_ball_speed()  # Aumenta velocidad al chocar
                 
                 # Envía el estado actual al cliente
                 update = {
@@ -152,6 +154,12 @@ class LocalPongGameConsumer(AsyncWebsocketConsumer):
         except asyncio.CancelledError:
             logging.debug("Game loop cancelado (socket cerrado).")
     
+    def increase_ball_speed(self):
+        """Aumenta la velocidad de la pelota en un 5% conservando el signo."""
+        self.ball_vx = self.ball_vx * 1.05
+        self.ball_vy = self.ball_vy * 1.05
+        logging.debug(f"Velocidad de la pelota aumentada: vx={self.ball_vx:.2f}, vy={self.ball_vy:.2f}")
+    
     def reset_ball(self):
         self.ball_x = 50
         self.ball_y = 50
@@ -169,3 +177,5 @@ class LocalPongGameConsumer(AsyncWebsocketConsumer):
             "score_right": self.score_right,
         }
         await self.send(text_data=json.dumps(init_state))
+
+

@@ -24,6 +24,45 @@ let currentFriendsViewContext = "chat"; // Contexto actual de la vista de amigos
 let globalBlockedUsers = [];
 let chatHistoryIntervalId = null;
 
+// Define globalmente los listeners para el torneo
+window.tournamentHandleKeyDown = function(e) {
+  if (e.repeat) return;
+  if (!window.tournamentLocalSocket) return; // Si no existe, no hace nada
+  let message = null;
+  if (e.code === "KeyW") {
+    message = { type: "paddle_input", paddle: "left", speed: -3 };
+  } else if (e.code === "KeyS") {
+    message = { type: "paddle_input", paddle: "left", speed: 3 };
+  } else if (e.code === "ArrowUp") {
+    message = { type: "paddle_input", paddle: "right", speed: -3 };
+  } else if (e.code === "ArrowDown") {
+    message = { type: "paddle_input", paddle: "right", speed: 3 };
+  }
+  if (message && window.tournamentLocalSocket.readyState === WebSocket.OPEN) {
+    window.tournamentLocalSocket.send(JSON.stringify(message));
+  }
+};
+
+window.tournamentHandleKeyUp = function(e) {
+  if (!window.tournamentLocalSocket) return;
+  let message = null;
+  if (e.code === "KeyW" || e.code === "KeyS") {
+    message = { type: "paddle_input", paddle: "left", speed: 0 };
+  } else if (e.code === "ArrowUp" || e.code === "ArrowDown") {
+    message = { type: "paddle_input", paddle: "right", speed: 0 };
+  }
+  if (message && window.tournamentLocalSocket.readyState === WebSocket.OPEN) {
+    window.tournamentLocalSocket.send(JSON.stringify(message));
+  }
+};
+
+
+document.addEventListener('keydown', function(event) {
+  // keyCode 37: flecha izquierda, 38: flecha arriba, 39: flecha derecha, 40: flecha abajo
+  if ([37, 38, 39, 40].indexOf(event.keyCode) > -1) {
+    event.preventDefault();
+  }
+});
 
 function getToken() {
   return localStorage.getItem("token");
@@ -192,7 +231,7 @@ function getHashQueryParams() {
 function router() {
   const hash = window.location.hash.replace("#", "");
   const token = getToken();
-
+  cleanupTournamentSocket();
   updateNavbarVisibility(!!token);
   
   // Cierra el WS de Pong online, si existe
@@ -2085,6 +2124,476 @@ function cleanupLocalGameView() {
 
 // Almacena la función de limpieza globalmente para que el router pueda invocarla al cambiar de vista
 window.cleanupLocalGameView = cleanupLocalGameView;
+
+
+/**
+ * Muestra la vista inicial del torneo con el botón "4 Players".
+ */
+function renderTournamentView() {
+  const contentHtml = `
+    <h2>Torneo Local</h2>
+    <div class="text-center mt-4">
+      <button id="btn4Players" class="btn btn-primary">4 Players</button>
+    </div>
+  `;
+  renderLayout(contentHtml);
+  
+  document.getElementById("btn4Players").addEventListener("click", () => {
+    renderTournamentForm();
+  });
+}
+
+/**
+ * Muestra el formulario para registrar los 4 jugadores.
+ */
+function renderTournamentForm() {
+  const formHtml = `
+    <div id="tournamentForm" class="mt-4">
+      <h3>Registro de Jugadores</h3>
+      <form id="tournamentPlayersForm">
+        <div class="mb-2">
+          <label for="player1">Player 1:</label>
+          <input type="text" id="player1" class="form-control" maxlength="10" placeholder="Nombre">
+        </div>
+        <div class="mb-2">
+          <label for="player2">Player 2:</label>
+          <input type="text" id="player2" class="form-control" maxlength="10" placeholder="Nombre">
+        </div>
+        <div class="mb-2">
+          <label for="player3">Player 3:</label>
+          <input type="text" id="player3" class="form-control" maxlength="10" placeholder="Nombre">
+        </div>
+        <div class="mb-2">
+          <label for="player4">Player 4:</label>
+          <input type="text" id="player4" class="form-control" maxlength="10" placeholder="Nombre">
+        </div>
+        <button type="submit" class="btn btn-success">Validar</button>
+      </form>
+      <div id="tournamentError" class="text-danger mt-2"></div>
+    </div>
+  `;
+  const mainContent = document.getElementById("mainContent");
+  mainContent.innerHTML = formHtml;
+  
+  document.getElementById("tournamentPlayersForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+    const player1 = document.getElementById("player1").value.trim();
+    const player2 = document.getElementById("player2").value.trim();
+    const player3 = document.getElementById("player3").value.trim();
+    const player4 = document.getElementById("player4").value.trim();
+    
+    const players = [player1, player2, player3, player4];
+    const errorEl = document.getElementById("tournamentError");
+    
+    // Validaciones: no vacíos, sin espacios y nombres únicos.
+    for (let i = 0; i < players.length; i++) {
+      if (!players[i]) {
+        errorEl.textContent = `Player ${i + 1} no puede estar vacío.`;
+        return;
+      }
+      if (/\s/.test(players[i])) {
+        errorEl.textContent = `Player ${i + 1} no puede contener espacios.`;
+        return;
+      }
+    }
+    if (new Set(players).size < players.length) {
+      errorEl.textContent = "Los nombres de los jugadores deben ser únicos.";
+      return;
+    }
+    errorEl.textContent = "";
+    renderTournamentBracket(players);
+  });
+}
+
+/**
+ * Recibe el array de 4 jugadores, los baraja aleatoriamente y muestra un bracket.
+ * Se muestra la estructura del torneo (ronda 1, final y winner) junto con un botón "Play".
+ */
+function renderTournamentBracket(players) {
+  shuffleArray(players); // Baraja el array (algoritmo Fisher-Yates)
+
+  const bracketHtml = `
+    <div class="bracket-container">
+      <!-- Columna Izquierda (Ronda 1) -->
+      <div class="round-col">
+        <!-- Match 1 -->
+        <div class="match-box">
+          <div class="player">${players[0]}</div>
+          <div class="player">${players[1]}</div>
+          <div class="connector connector-top"></div>
+        </div>
+        <!-- Match 2 -->
+        <div class="match-box">
+          <div class="player">${players[2]}</div>
+          <div class="player">${players[3]}</div>
+          <div class="connector connector-bottom"></div>
+        </div>
+      </div>
+
+      <!-- Columna de Conectores entre Ronda 1 y la Final -->
+      <div class="lines-col">
+        <div class="connector-line final-connector-top"></div>
+        <div class="connector-line final-connector-bottom"></div>
+      </div>
+
+      <!-- Columna Central (Final) -->
+      <div class="round-col final-col">
+        <div class="match-box match-final">
+          <!-- Cuadro final vacío (tamaño igual a los match-box) -->
+          <div class="player"></div>
+          <div class="player"></div>
+        </div>
+      </div>
+
+      <!-- Conector entre la Final y el Winner Box -->
+      <div class="lines-col">
+        <div class="connector-line final-winner-line"></div>
+      </div>
+
+      <!-- Columna Derecha (Winner Box) -->
+      <div class="round-col winner-col">
+        <div class="match-box winner-box">
+          <!-- Cuadro del ganador vacío -->
+          <div class="player"></div>
+        </div>
+      </div>
+    </div>
+    <div class="text-center mt-4">
+      <button id="tournamentPlayBtn" class="btn btn-primary">Play</button>
+    </div>
+  `;
+  const mainContent = document.getElementById("mainContent");
+  mainContent.innerHTML = bracketHtml;
+  
+  // Al pulsar Play, inicia el torneo
+  document.getElementById("tournamentPlayBtn").addEventListener("click", () => {
+    startTournament(players);
+  });
+}
+
+/**
+ * Función para iniciar un partido del torneo entre dos jugadores.
+ * Primero muestra una pantalla previa (pre-match) con los nombres y sus posiciones,
+ * y un botón "Go" para empezar el encuentro. Al pulsarlo, se lanza el partido.
+ *
+ * @param {string} playerLeft - Nombre del jugador que juega por la izquierda.
+ * @param {string} playerRight - Nombre del jugador que juega por la derecha.
+ * @param {Function} onMatchComplete - Callback que recibe {winner, score_left, score_right}.
+ */
+function startTournamentMatch(playerLeft, playerRight, onMatchComplete) {
+  // Primero mostramos la pantalla previa al partido.
+  showPreMatchScreen(playerLeft, playerRight, function() {
+    // Cuando se pulse "Go", se lanza el partido.
+    launchTournamentMatch(playerLeft, playerRight, onMatchComplete);
+  });
+}
+
+/**
+ * Muestra la pantalla previa al partido con los nombres de los jugadores y un botón "Go".
+ * Se indica quién es jugador de la izquierda y quién de la derecha.
+ *
+ * @param {string} playerLeft - Nombre del jugador de la izquierda.
+ * @param {string} playerRight - Nombre del jugador de la derecha.
+ * @param {Function} onGo - Callback que se ejecuta al pulsar el botón "Go".
+ */
+function showPreMatchScreen(playerLeft, playerRight, onGo) {
+  const preMatchHtml = `
+    <div class="text-center">
+      <h2>Próximo Partido</h2>
+      <p>
+        <strong>${playerLeft}</strong> vs <strong>${playerRight}</strong>
+      </p>
+      <div class="mt-4">
+        <button id="preMatchGoBtn" class="btn btn-primary">Go</button>
+      </div>
+    </div>
+  `;
+  renderLayout(preMatchHtml);
+  document.getElementById("preMatchGoBtn").addEventListener("click", onGo);
+}
+
+/**
+ * Lanza el partido en sí: renderiza la vista del juego, conecta el WS, inicia la cuenta atrás
+ * (desde 5) y controla el juego. Se espera el mensaje "game_over" del WS para mostrar el overlay con "Next".
+ *
+ * @param {string} playerLeft - Nombre del jugador de la izquierda.
+ * @param {string} playerRight - Nombre del jugador de la derecha.
+ * @param {Function} onMatchComplete - Callback que recibe {winner, score_left, score_right}.
+ */
+function launchTournamentMatch(playerLeft, playerRight, onMatchComplete) {
+  const contentHtml = `
+    <div class="text-center">
+      <h2>Partido: ${playerLeft} vs ${playerRight}</h2>
+      <p>
+        <span id="displayLeft">${playerLeft}</span> – 
+        <span id="displayRight">${playerRight}</span>
+      </p>
+      <canvas id="tournamentGameCanvas" width="800" height="400" style="background: #000;"></canvas>
+      <div id="tournamentScore" class="mt-2 d-flex justify-content-between" style="max-width: 800px; margin: 0 auto;">
+        <div id="tournamentLeftScore">0</div>
+        <div id="tournamentRightScore">0</div>
+      </div>
+      <p id="tournamentCountdown" style="font-size:1.5rem; margin-top:10px; color:black;"></p>
+    </div>
+  `;
+  renderLayout(contentHtml);
+  
+  window.tournamentGameOver = false;
+  window.tournamentPaddleLeft = 50;
+  window.tournamentPaddleRight = 50;
+  window.tournamentBallPos = { x: 50, y: 50 };
+  
+  const wsUrl = `${WS_BASE_URL}/ws/local_pong/`;
+  const localSocket = new WebSocket(wsUrl);
+  window.tournamentLocalSocket = localSocket;
+  
+  localSocket.onopen = () => {
+    console.log("WS torneo partido conectado.");
+    startTournamentCountdown(localSocket);
+  };
+  
+  localSocket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === "initial_state" || data.type === "local_game_update") {
+        updateTournamentGame(data);
+      } else if (data.type === "game_over") {
+        // Si el WS indica "Player Left", se toma como ganador a playerLeft, de lo contrario playerRight.
+        let computedWinner = (data.winner === "Player Left") ? playerLeft : playerRight;
+        data.winner = computedWinner;
+        displayTournamentGameOver(data, localSocket, onMatchComplete);
+      }
+    } catch (err) {
+      console.error("Error en WS torneo partido:", err);
+    }
+  };
+  
+  localSocket.onerror = (error) => {
+    console.error("Error en WS torneo partido:", error);
+  };
+  
+  // Listeners para teclado (movimiento fluido)
+  document.addEventListener("keydown", tournamentHandleKeyDown);
+  document.addEventListener("keyup", tournamentHandleKeyUp);
+  
+  function startTournamentCountdown(socket) {
+    const countdownEl = document.getElementById("tournamentCountdown");
+    let count = 5; // Inicia la cuenta desde 5
+    countdownEl.textContent = count;
+    const intervalId = setInterval(() => {
+      count--;
+      if (count > 0) {
+        countdownEl.textContent = count;
+      } else if (count === 0) {
+        countdownEl.textContent = "GO!";
+      } else {
+        clearInterval(intervalId);
+        countdownEl.textContent = "";
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "start_game" }));
+        }
+      }
+    }, 1000);
+  }
+  
+  function updateTournamentGame(gameState) {
+    window.tournamentBallPos = { x: gameState.ball_x, y: gameState.ball_y };
+    window.tournamentPaddleLeft = gameState.paddle_left;
+    window.tournamentPaddleRight = gameState.paddle_right;
+    document.getElementById("tournamentLeftScore").textContent = gameState.score_left;
+    document.getElementById("tournamentRightScore").textContent = gameState.score_right;
+    drawTournamentGame();
+  }
+  
+  function drawTournamentGame() {
+    const canvas = document.getElementById("tournamentGameCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const paddleWidth = 10;
+    const paddleHeight = 80;
+    const ballRadius = 10;
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cw, ch);
+    // Dibuja la pelota
+    const bx = (window.tournamentBallPos.x / 100) * cw;
+    const by = (window.tournamentBallPos.y / 100) * ch;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(bx, by, ballRadius, 0, Math.PI * 2);
+    ctx.fill();
+    // Dibuja las palas
+    const leftPaddleY = (window.tournamentPaddleLeft / 100) * ch - paddleHeight / 2;
+    const rightPaddleY = (window.tournamentPaddleRight / 100) * ch - paddleHeight / 2;
+    const leftPaddleX = 0.05 * cw;
+    const rightPaddleX = cw - 0.05 * cw - paddleWidth;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(leftPaddleX, leftPaddleY, paddleWidth, paddleHeight);
+    ctx.fillRect(rightPaddleX, rightPaddleY, paddleWidth, paddleHeight);
+    if (!window.tournamentGameOver) {
+      requestAnimationFrame(drawTournamentGame);
+    }
+  }
+  
+  function tournamentHandleKeyDown(e) {
+    if (e.repeat) return;
+    if (!window.tournamentLocalSocket || window.tournamentLocalSocket.readyState !== WebSocket.OPEN) return;
+    let message = null;
+    if (e.code === "KeyW") {
+      message = { type: "paddle_input", paddle: "left", speed: -3 };
+    } else if (e.code === "KeyS") {
+      message = { type: "paddle_input", paddle: "left", speed: 3 };
+    } else if (e.code === "ArrowUp") {
+      message = { type: "paddle_input", paddle: "right", speed: -3 };
+    } else if (e.code === "ArrowDown") {
+      message = { type: "paddle_input", paddle: "right", speed: 3 };
+    }
+    if (message) {
+      window.tournamentLocalSocket.send(JSON.stringify(message));
+    }
+  }
+  
+  function tournamentHandleKeyUp(e) {
+    if (!window.tournamentLocalSocket || window.tournamentLocalSocket.readyState !== WebSocket.OPEN) return;
+    let message = null;
+    if (e.code === "KeyW" || e.code === "KeyS") {
+      message = { type: "paddle_input", paddle: "left", speed: 0 };
+    } else if (e.code === "ArrowUp" || e.code === "ArrowDown") {
+      message = { type: "paddle_input", paddle: "right", speed: 0 };
+    }
+    if (message) {
+      window.tournamentLocalSocket.send(JSON.stringify(message));
+    }
+  }
+  
+  
+  function displayTournamentGameOver(resultData, socket, callback) {
+    window.tournamentGameOver = true;
+    document.removeEventListener("keydown", tournamentHandleKeyDown);
+    document.removeEventListener("keyup", tournamentHandleKeyUp);
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.height = "100%";
+    overlay.style.backgroundColor = "rgba(0,0,0,0.7)";
+    overlay.style.display = "flex";
+    overlay.style.flexDirection = "column";
+    overlay.style.justifyContent = "center";
+    overlay.style.alignItems = "center";
+    overlay.style.zIndex = "9999";
+    const h2 = document.createElement("h2");
+    h2.style.color = "#fff";
+    h2.textContent = `${resultData.winner} gana (${resultData.score_left} - ${resultData.score_right})`;
+    overlay.appendChild(h2);
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "btn btn-primary mt-3";
+    nextBtn.textContent = "Next";
+    nextBtn.onclick = () => {
+      document.body.removeChild(overlay);
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+      callback(resultData);
+    };
+    overlay.appendChild(nextBtn);
+    document.body.appendChild(overlay);
+  }
+}
+
+/**
+ * Orquesta el torneo local: tres partidos (Match 1, Match 2 y la Final).
+ * Al finalizar, muestra el podio final.
+ */
+function startTournament(players) {
+  const tournamentResults = {
+    match1: null,
+    match2: null,
+    final: null
+  };
+  
+  // Primer partido: players[0] vs players[1]
+  startTournamentMatch(players[0], players[1], function(result1) {
+    tournamentResults.match1 = result1;
+    // Segundo partido: players[2] vs players[3]
+    startTournamentMatch(players[2], players[3], function(result2) {
+      tournamentResults.match2 = result2;
+      const winner1 = result1.winner;
+      const winner2 = result2.winner;
+      // Final: entre los ganadores
+      startTournamentMatch(winner1, winner2, function(finalResult) {
+        tournamentResults.final = finalResult;
+        // Podio: el ganador de la final es 1°, el perdedor es 2°.
+        // Los perdedores de la primera ronda se asignan aleatoriamente a 3° y 4°.
+        const loser1 = (winner1 === players[0]) ? players[1] : players[0];
+        const loser2 = (winner2 === players[2]) ? players[3] : players[2];
+        const podium = {
+          first: finalResult.winner,
+          second: (finalResult.winner === winner1) ? winner2 : winner1,
+          third: "",
+          fourth: ""
+        };
+        const losers = [loser1, loser2];
+        shuffleArray(losers);
+        podium.third = losers[0];
+        podium.fourth = losers[1];
+        renderTournamentPodium(podium);
+      });
+    });
+  });
+}
+
+/**
+ * Muestra el podio final en el DOM.
+ */
+function renderTournamentPodium(podium) {
+  const contentHtml = `
+    <h2 class="text-center mt-4">Podio del Torneo</h2>
+    <div class="text-center">
+      <p><strong>1°:</strong> ${podium.first}</p>
+      <p><strong>2°:</strong> ${podium.second}</p>
+      <p><strong>3°:</strong> ${podium.third}</p>
+      <p><strong>4°:</strong> ${podium.fourth}</p>
+    </div>
+    <div class="text-center mt-4">
+      <button id="restartTournamentBtn" class="btn btn-primary">Reiniciar Torneo</button>
+    </div>
+  `;
+  renderLayout(contentHtml);
+  document.getElementById("restartTournamentBtn").addEventListener("click", () => {
+    renderTournamentView();
+  });
+}
+
+/**
+ * Función para barajar un array in-place (algoritmo Fisher-Yates).
+ */
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function cleanupTournamentSocket() {
+  if (window.tournamentLocalSocket) {
+    if (window.tournamentLocalSocket.readyState === WebSocket.OPEN) {
+      window.tournamentLocalSocket.close();
+    }
+    window.tournamentLocalSocket = null;
+  }
+  document.removeEventListener("keydown", window.tournamentHandleKeyDown);
+  document.removeEventListener("keyup", window.tournamentHandleKeyUp);
+}
+
+
+
+
+
+
 
 
 
