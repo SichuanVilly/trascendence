@@ -24,6 +24,7 @@ let currentFriendsViewContext = "chat"; // Contexto actual de la vista de amigos
 let globalBlockedUsers = [];
 let chatHistoryIntervalId = null;
 
+
 function getToken() {
   return localStorage.getItem("token");
 }
@@ -105,7 +106,7 @@ function renderLayout(contentHtml) {
       <div class="row h-100">
         <!-- Sidebar -->
         <div class="col-12 col-md-3 col-lg-2 bg-dark text-white p-3">
-          <h3 class="mb-4">FT_Transcendence</h3>
+          <h3 class="mb-4">Transcendence</h3>
           <ul class="nav flex-column">
             <li class="nav-item mb-2">
               <a class="nav-link text-white" href="#home">Home</a>
@@ -191,11 +192,18 @@ function getHashQueryParams() {
 function router() {
   const hash = window.location.hash.replace("#", "");
   const token = getToken();
-  
+
   updateNavbarVisibility(!!token);
-  closePongWS();
-  // No cerramos el WS de usuarios (userSocket) si se mantiene abierto globalmente.
   
+  // Cierra el WS de Pong online, si existe
+  closePongWS();
+  
+  // Si la vista actual NO es "game-local", se limpia la vista local
+  if (!hash.startsWith("game-local") && typeof window.cleanupLocalGameView === "function") {
+    window.cleanupLocalGameView();
+  }
+  
+  // No cerramos el WS de usuarios (userSocket) si se mantiene abierto globalmente.
   if (token && window.location.hash !== "#login" && window.location.hash !== "#register") {
     if (!userSocket || userSocket.readyState !== WebSocket.OPEN) {
       initUsersWebSocket();
@@ -219,7 +227,6 @@ function router() {
       renderPrivateChatView(params.friend);
       return;
     } else {
-      // Si no hay parámetro, se muestra la vista general de chat (por ejemplo, la lista de amigos)
       renderChatView();
       return;
     }
@@ -260,6 +267,7 @@ function router() {
       window.location.hash = token ? "#home" : "#login";
   }
 }
+
 
 function logout() {
   clearToken();
@@ -657,6 +665,10 @@ function renderSettingsView() {
           <p>Victorias: <span id="winsCount">${data.wins ?? 0}</span></p>
           <p>Derrotas: <span id="lossesCount">${data.losses ?? 0}</span></p>
         </div>
+        <!-- Gráfica circular para victorias y derrotas -->
+        <div class="chart-container mb-4" style="width:300px; margin: auto;">
+          <canvas id="winLossChart"></canvas>
+        </div>
         <h4 class="mt-4">Últimas partidas</h4>
         <div id="matchHistory" class="mb-4">Cargando historial...</div>
         <button class="btn btn-primary" id="saveSettingsBtn">Guardar cambios</button>
@@ -677,6 +689,41 @@ function renderSettingsView() {
             document.getElementById("avatarImg").src = e.target.result;
           };
           reader.readAsDataURL(file);
+        }
+      });
+
+      // Inicializar la gráfica circular usando Chart.js
+      const wins = parseInt(document.getElementById("winsCount").innerText);
+      const losses = parseInt(document.getElementById("lossesCount").innerText);
+      let chartData, chartLabels, chartColors;
+      if (wins + losses > 0) {
+        const total = wins + losses;
+        const winsPercentage = Math.round((wins / total) * 100);
+        const lossesPercentage = 100 - winsPercentage;
+        chartData = [wins, losses];
+        chartLabels = [`Victorias ${winsPercentage}%`, `Derrotas ${lossesPercentage}%`];
+        chartColors = ["#28a745", "#dc3545"];
+      } else {
+        chartData = [1];
+        chartLabels = ["No data"];
+        chartColors = ["#6c757d"];
+      }
+      const ctx = document.getElementById("winLossChart").getContext("2d");
+      new Chart(ctx, {
+        type: "pie",
+        data: {
+          labels: chartLabels,
+          datasets: [{
+            data: chartData,
+            backgroundColor: chartColors,
+          }]
+        },
+        options: {
+          plugins: {
+            legend: {
+              position: "bottom"
+            }
+          }
         }
       });
 
@@ -770,6 +817,7 @@ function renderSettingsView() {
       console.error("Error fetching user details:", err);
     });
 }
+
 
 
 
@@ -1077,11 +1125,6 @@ function displayIaGameOver(data) {
 
 
 
-
-function renderGameLocalView() {
-  const contentHtml = `<h2>Juego: Local</h2><p>Contenido para juego local.</p>`;
-  renderLayout(contentHtml);
-}
 function renderGameOnlineView() {
   const contentHtml = `<h2>Juego: Online</h2><p>Contenido para juego online.</p>`;
   renderLayout(contentHtml);
@@ -1672,4 +1715,382 @@ function hideInvitationModal() {
   if (modal) modal.hide();
   window.inviteFromUser = null;
 }
+
+
+function renderGameLocalView() {
+  // Si existe una vista local anterior, la limpiamos
+  if (window.cleanupLocalGameView) {
+    window.cleanupLocalGameView();
+  }
+  
+  // Inyecta el HTML del juego local en el contenedor "app" (la sidebar se mantiene fija)
+  const contentHtml = `
+    <div class="text-center">
+      <h2>Juego Local Pong</h2>
+      <canvas id="gameCanvasLocal" width="800" height="400" style="background: #000;"></canvas>
+      <div id="localScore" class="mt-2 d-flex justify-content-between" style="max-width: 800px; margin: 0 auto;">
+        <div id="localLeftScore">0</div>
+        <div id="localRightScore">0</div>
+      </div>
+      <p id="localCountdown" style="font-size:1.5rem; margin-top:10px; color:black;"></p>
+    </div>
+  `;
+  renderLayout(contentHtml);
+
+  // Reinicia las variables globales del juego local
+  window.localGameOver = false;
+  window.localPaddleLeft = 50;
+  window.localPaddleRight = 50;
+  window.localBallPos = { x: 50, y: 50 };
+
+  // Genera un roomId aleatorio para el juego local (puedes usar uno fijo si lo prefieres)
+  const localRoomId = Math.floor(Math.random() * 10000);
+
+  // Inicializa el WebSocket y el loop de dibujo del canvas para el juego local
+  initLocalGameWebSocket(localRoomId);
+  initLocalGameCanvasLoop();
+
+  // Inicia la cuenta atrás para comenzar la partida
+  startLocalGameCountdown(localRoomId);
+}
+
+function initLocalGameWebSocket(roomId) {
+  const wsUrl = `${WS_BASE_URL}/ws/local_pong/`;
+  console.log("Abriendo WS local:", wsUrl);
+  const socket = new WebSocket(wsUrl);
+  window.localPongSocket = socket;
+  
+  socket.onopen = () => {
+    console.log("WS Local conectado.");
+    // La partida NO se inicia aún; se iniciará después de la cuenta atrás.
+  };
+
+  socket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === "initial_state" || data.type === "local_game_update") {
+        updateLocalGame(data);
+      } else if (data.type === "game_over") {
+        displayLocalGameOver(data);
+      }
+    } catch (err) {
+      console.error("Error procesando mensaje del WS local:", err);
+    }
+  };
+
+  socket.onerror = (error) => {
+    console.error("Error en WS local:", error);
+  };
+
+  // Agrega los listeners para teclado usando las funciones definidas
+  document.addEventListener("keydown", handleLocalKeyDown);
+  document.addEventListener("keyup", handleLocalKeyUp);
+}
+
+function initLocalGameCanvasLoop() {
+  const canvas = document.getElementById("gameCanvasLocal");
+  const ctx = canvas.getContext("2d");
+  const cw = canvas.width;
+  const ch = canvas.height;
+  const paddleWidth = 10;
+  const paddleHeight = 80;
+  const ballRadius = 10;
+  
+  function drawFrame() {
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cw, ch);
+    
+    // Dibuja la pelota
+    const bx = (window.localBallPos.x / 100) * cw;
+    const by = (window.localBallPos.y / 100) * ch;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(bx, by, ballRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Dibuja las palas
+    const leftPaddleY = (window.localPaddleLeft / 100) * ch - paddleHeight / 2;
+    const rightPaddleY = (window.localPaddleRight / 100) * ch - paddleHeight / 2;
+    const leftPaddleX = 0.05 * cw;
+    const rightPaddleX = cw - 0.05 * cw - paddleWidth;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(leftPaddleX, leftPaddleY, paddleWidth, paddleHeight);
+    ctx.fillRect(rightPaddleX, rightPaddleY, paddleWidth, paddleHeight);
+    
+    if (!window.localGameOver) {
+      requestAnimationFrame(drawFrame);
+    }
+  }
+  drawFrame();
+}
+
+function startLocalGameCountdown(roomId) {
+  const countdownEl = document.getElementById("localCountdown");
+  let count = 3;
+  countdownEl.textContent = count;
+  const intervalId = setInterval(() => {
+    count--;
+    if (count > 0) {
+      countdownEl.textContent = count;
+    } else if (count === 0) {
+      countdownEl.textContent = "GO!";
+    } else {
+      clearInterval(intervalId);
+      countdownEl.textContent = "";
+      // Al finalizar la cuenta atrás, inicia la partida enviando "start_game"
+      if (window.localPongSocket && window.localPongSocket.readyState === WebSocket.OPEN) {
+        window.localPongSocket.send(JSON.stringify({ type: "start_game" }));
+      }
+    }
+  }, 1000);
+}
+
+function updateLocalGame(gameState) {
+  window.localBallPos = { x: gameState.ball_x, y: gameState.ball_y };
+  window.localPaddleLeft = gameState.paddle_left;
+  window.localPaddleRight = gameState.paddle_right;
+  document.getElementById("localLeftScore").textContent = gameState.score_left;
+  document.getElementById("localRightScore").textContent = gameState.score_right;
+}
+
+function renderGameLocalView() {
+  // Limpia la vista local previa, si existe
+  if (window.cleanupLocalGameView) {
+    window.cleanupLocalGameView();
+  }
+  
+  // Marca la vista local como activa
+  window.localGameActive = true;
+  
+  const contentHtml = `
+    <div class="text-center">
+      <h2>Juego Local Pong</h2>
+      <canvas id="gameCanvasLocal" width="800" height="400" style="background: #000;"></canvas>
+      <div id="localScore" class="mt-2 d-flex justify-content-between" style="max-width: 800px; margin: 0 auto;">
+        <div id="localLeftScore">0</div>
+        <div id="localRightScore">0</div>
+      </div>
+      <p id="localCountdown" style="font-size:1.5rem; margin-top:10px; color: black;"></p>
+    </div>
+  `;
+  renderLayout(contentHtml);
+
+  // Reinicia las variables del juego local
+  window.localGameOver = false;
+  window.localPaddleLeft = 50;
+  window.localPaddleRight = 50;
+  window.localBallPos = { x: 50, y: 50 };
+
+  const localRoomId = Math.floor(Math.random() * 10000);
+
+  initLocalGameWebSocket(localRoomId);
+  initLocalGameCanvasLoop();
+  startLocalGameCountdown(localRoomId);
+}
+
+function initLocalGameWebSocket(roomId) {
+  const wsUrl = `${WS_BASE_URL}/ws/local_pong/`;
+  console.log("Abriendo WS local:", wsUrl);
+  const socket = new WebSocket(wsUrl);
+  window.localPongSocket = socket;
+  
+  socket.onopen = () => {
+    console.log("WS Local conectado.");
+  };
+
+  socket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (!window.localGameActive) return; // No actualiza si la vista no está activa
+      if (data.type === "initial_state" || data.type === "local_game_update") {
+        updateLocalGame(data);
+      } else if (data.type === "game_over") {
+        displayLocalGameOver(data);
+      }
+    } catch (err) {
+      console.error("Error procesando mensaje del WS local:", err);
+    }
+  };
+
+  socket.onerror = (error) => {
+    console.error("Error en WS local:", error);
+  };
+
+  document.addEventListener("keydown", handleLocalKeyDown);
+  document.addEventListener("keyup", handleLocalKeyUp);
+}
+
+function initLocalGameCanvasLoop() {
+  const canvas = document.getElementById("gameCanvasLocal");
+  const ctx = canvas.getContext("2d");
+  const cw = canvas.width;
+  const ch = canvas.height;
+  const paddleWidth = 10;
+  const paddleHeight = 80;
+  const ballRadius = 10;
+  
+  function drawFrame() {
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cw, ch);
+    
+    // Dibuja la pelota
+    const bx = (window.localBallPos.x / 100) * cw;
+    const by = (window.localBallPos.y / 100) * ch;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(bx, by, ballRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Dibuja las palas
+    const leftPaddleY = (window.localPaddleLeft / 100) * ch - paddleHeight / 2;
+    const rightPaddleY = (window.localPaddleRight / 100) * ch - paddleHeight / 2;
+    const leftPaddleX = 0.05 * cw;
+    const rightPaddleX = cw - 0.05 * cw - paddleWidth;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(leftPaddleX, leftPaddleY, paddleWidth, paddleHeight);
+    ctx.fillRect(rightPaddleX, rightPaddleY, paddleWidth, paddleHeight);
+    
+    if (!window.localGameOver) {
+      requestAnimationFrame(drawFrame);
+    }
+  }
+  drawFrame();
+}
+
+function startLocalGameCountdown(roomId) {
+  const countdownEl = document.getElementById("localCountdown");
+  let count = 3;
+  countdownEl.textContent = count;
+  const intervalId = setInterval(() => {
+    count--;
+    if (count > 0) {
+      countdownEl.textContent = count;
+    } else if (count === 0) {
+      countdownEl.textContent = "GO!";
+    } else {
+      clearInterval(intervalId);
+      countdownEl.textContent = "";
+      if (window.localPongSocket && window.localPongSocket.readyState === WebSocket.OPEN) {
+        window.localPongSocket.send(JSON.stringify({ type: "start_game" }));
+      }
+    }
+  }, 1000);
+}
+
+function updateLocalGame(gameState) {
+  window.localBallPos = { x: gameState.ball_x, y: gameState.ball_y };
+  window.localPaddleLeft = gameState.paddle_left;
+  window.localPaddleRight = gameState.paddle_right;
+  const leftScoreEl = document.getElementById("localLeftScore");
+  const rightScoreEl = document.getElementById("localRightScore");
+  if (leftScoreEl) leftScoreEl.textContent = gameState.score_left;
+  if (rightScoreEl) rightScoreEl.textContent = gameState.score_right;
+}
+
+function displayLocalGameOver(data) {
+  window.localGameOver = true;
+  removeLocalGameListeners();
+  
+  const winner = data.winner || "Desconocido";
+  const scoreLeft = data.score_left ?? 0;
+  const scoreRight = data.score_right ?? 0;
+  
+  let resultMessage = (winner === "Player Left")
+    ? "¡El jugador izquierdo ha ganado!"
+    : "¡El jugador derecho ha ganado!";
+
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100%";
+  overlay.style.height = "100%";
+  overlay.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+  overlay.style.display = "flex";
+  overlay.style.flexDirection = "column";
+  overlay.style.justifyContent = "center";
+  overlay.style.alignItems = "center";
+  overlay.style.zIndex = 9999;
+
+  const h2 = document.createElement("h2");
+  h2.style.color = "#fff";
+  h2.textContent = resultMessage;
+  overlay.appendChild(h2);
+
+  const p = document.createElement("p");
+  p.style.color = "#fff";
+  p.style.fontSize = "24px";
+  p.textContent = `Ganador: ${winner} | ${scoreLeft} - ${scoreRight}`;
+  overlay.appendChild(p);
+
+  const btn = document.createElement("button");
+  btn.className = "btn btn-primary mt-3";
+  btn.textContent = "Volver al Home";
+  btn.onclick = () => {
+    document.body.removeChild(overlay);
+    cleanupLocalGameView();
+    window.location.hash = "#home";
+  };
+  overlay.appendChild(btn);
+
+  document.body.appendChild(overlay);
+}
+
+// Definimos los listeners de teclado
+function handleLocalKeyDown(e) {
+  if (e.repeat) return;
+  let message = null;
+  if (e.code === "KeyW") {
+    message = { type: "paddle_input", paddle: "left", speed: -3 };
+  } else if (e.code === "KeyS") {
+    message = { type: "paddle_input", paddle: "left", speed: 3 };
+  } else if (e.code === "ArrowUp") {
+    message = { type: "paddle_input", paddle: "right", speed: -3 };
+  } else if (e.code === "ArrowDown") {
+    message = { type: "paddle_input", paddle: "right", speed: 3 };
+  }
+  if (message && window.localPongSocket && window.localPongSocket.readyState === WebSocket.OPEN) {
+    window.localPongSocket.send(JSON.stringify(message));
+  }
+}
+
+function handleLocalKeyUp(e) {
+  let message = null;
+  if (e.code === "KeyW" || e.code === "KeyS") {
+    message = { type: "paddle_input", paddle: "left", speed: 0 };
+  } else if (e.code === "ArrowUp" || e.code === "ArrowDown") {
+    message = { type: "paddle_input", paddle: "right", speed: 0 };
+  }
+  if (message && window.localPongSocket && window.localPongSocket.readyState === WebSocket.OPEN) {
+    window.localPongSocket.send(JSON.stringify(message));
+  }
+}
+
+function removeLocalGameListeners() {
+  document.removeEventListener("keydown", handleLocalKeyDown);
+  document.removeEventListener("keyup", handleLocalKeyUp);
+}
+
+function cleanupLocalGameView() {
+  removeLocalGameListeners();
+  if (window.localPongSocket && window.localPongSocket.readyState === WebSocket.OPEN) {
+    window.localPongSocket.close();
+  }
+  window.localPongSocket = null;
+  // Marca la vista local como inactiva
+  window.localGameActive = false;
+}
+
+// Almacena la función de limpieza globalmente para que el router pueda invocarla al cambiar de vista
+window.cleanupLocalGameView = cleanupLocalGameView;
+
+
+
+
+
+
+
+
 
