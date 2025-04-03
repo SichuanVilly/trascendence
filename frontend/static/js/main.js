@@ -345,7 +345,6 @@ function updateFriendsList(friends, viewContext = "friends") {
         if (viewContext === "friends") {
           buttonHTML = `<button class="btn btn-sm btn-danger action-friend-btn" data-friend="${friend.username}" data-action="remove">Remove</button>`;
         } else if (viewContext === "chat") {
-          // Si el amigo está bloqueado, mostrar solo "Unblock"
           if (globalBlockedUsers.includes(friend.username)) {
             buttonHTML = `<button class="btn btn-sm btn-secondary action-friend-btn" data-friend="${friend.username}" data-action="unblock">Unblock</button>`;
           } else {
@@ -355,12 +354,13 @@ function updateFriendsList(friends, viewContext = "friends") {
             buttonHTML = playButtonHTML + " " + chatButtonHTML + " " + blockButtonHTML;
           }
         }
-  
+
         return `
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <div>
               <img src="${fullAvatarUrl}" alt="Avatar" style="width:30px; height:30px; border-radius:50%; margin-right:10px;">
-              ${friend.username} ${statusHTML}
+              <a href="#" onclick="renderUserProfileView('${friend.username}'); return false;">${friend.username}</a>
+              ${statusHTML}
             </div>
             <div>
               ${buttonHTML}
@@ -372,7 +372,7 @@ function updateFriendsList(friends, viewContext = "friends") {
     html = `<p>No tienes amigos añadidos.</p>`;
   }
   friendsListContainer.innerHTML = html;
-  
+
   const actionButtons = document.querySelectorAll(".action-friend-btn");
   actionButtons.forEach(btn => {
     btn.addEventListener("click", function() {
@@ -396,6 +396,7 @@ function updateFriendsList(friends, viewContext = "friends") {
     });
   });
 }
+
 
 function blockFriend(friendName) {
   const token = getToken();
@@ -850,6 +851,92 @@ function renderSettingsView() {
       console.error("Error fetching user details:", err);
     });
 }
+
+function renderUserProfileView(username) {
+  const token = getToken();
+  // Se asume que este endpoint está definido en el backend y retorna datos públicos del usuario
+  fetch(`${API_BASE_URL}/api/users/profile/${username}/`, {
+    headers: { "Authorization": "Bearer " + token }
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("HTTP error " + response.status);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log("Perfil del usuario:", data);
+      let avatarPath = data.avatar ? data.avatar : 'avatars/default_avatar.png';
+      if (avatarPath.startsWith('/media/')) {
+        avatarPath = avatarPath.slice(1);
+      }
+      const avatarUrl = avatarPath.startsWith('http')
+        ? avatarPath
+        : `${API_BASE_URL}/${avatarPath}`;
+
+      const contentHtml = `
+        <h2 class="mt-4">Perfil de Usuario</h2>
+        <div class="text-center my-4">
+          <img src="${avatarUrl}" alt="Avatar de ${data.username}" style="width:150px; height:150px; border-radius:50%;">
+        </div>
+        <div class="mb-3">
+          <p><strong>Nombre de Usuario:</strong> ${data.username}</p>
+        </div>
+        <div class="mb-3">
+          <p><strong>Victorias:</strong> <span id="winsCount">${data.wins ?? 0}</span></p>
+          <p><strong>Derrotas:</strong> <span id="lossesCount">${data.losses ?? 0}</span></p>
+        </div>
+        <!-- Gráfica circular para victorias y derrotas -->
+        <div class="chart-container mb-4" style="width:300px; margin: auto;">
+          <canvas id="winLossChart"></canvas>
+        </div>
+        <button class="btn btn-secondary" onclick="renderChatView()">Volver al Chat</button>
+      `;
+
+      renderLayout(contentHtml);
+
+      // Inicializar la gráfica circular usando Chart.js
+      const wins = parseInt(document.getElementById("winsCount").innerText);
+      const losses = parseInt(document.getElementById("lossesCount").innerText);
+      let chartData, chartLabels, chartColors;
+      if (wins + losses > 0) {
+        const total = wins + losses;
+        const winsPercentage = Math.round((wins / total) * 100);
+        const lossesPercentage = 100 - winsPercentage;
+        chartData = [wins, losses];
+        chartLabels = [`Victorias ${winsPercentage}%`, `Derrotas ${lossesPercentage}%`];
+        chartColors = ["#28a745", "#dc3545"];
+      } else {
+        chartData = [1];
+        chartLabels = ["No data"];
+        chartColors = ["#6c757d"];
+      }
+      const ctx = document.getElementById("winLossChart").getContext("2d");
+      new Chart(ctx, {
+        type: "pie",
+        data: {
+          labels: chartLabels,
+          datasets: [{
+            data: chartData,
+            backgroundColor: chartColors,
+          }]
+        },
+        options: {
+          plugins: {
+            legend: {
+              position: "bottom"
+            }
+          }
+        }
+      });
+    })
+    .catch(err => {
+      console.error("Error fetching user profile:", err);
+      alert("Error al obtener el perfil del usuario.");
+    });
+}
+
+
 
 
 

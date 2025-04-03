@@ -14,6 +14,8 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from rest_framework.decorators import api_view, permission_classes
 from .models import MatchHistory
+from django.shortcuts import get_object_or_404
+
 
 User = get_user_model()
 
@@ -257,6 +259,17 @@ class SaveMatchView(APIView):
             return Response({"error": "Uno de los usuarios no existe."}, status=400)
         except Exception as e:
             return Response({"error": str(e)}, status=400)
+
+
+
+class PublicUserProfileView(APIView):
+    permission_classes = [IsAuthenticated]  # O AllowAny si quieres que sea público sin autenticación
+
+    def get(self, request, username):
+        user = get_object_or_404(User, username=username)
+        # Se utiliza el serializer para exponer los datos públicos del usuario
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
 
 
 @api_view(["POST"])
