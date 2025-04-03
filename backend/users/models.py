@@ -5,7 +5,7 @@ from django.conf import settings
 
 class CustomUser(AbstractUser):
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, default='avatars/default_avatar.png')
-    
+    email = models.EmailField(unique=False)
     # Campos adicionales
     wins = models.IntegerField(default=0)
     losses = models.IntegerField(default=0)

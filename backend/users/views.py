@@ -36,7 +36,6 @@ class RegisterView(generics.CreateAPIView):
             "access": str(refresh.access_token),
         }, status=status.HTTP_201_CREATED)
 
-
 class LoginView(APIView):
     permission_classes = (AllowAny,)
 

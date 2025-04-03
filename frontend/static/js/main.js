@@ -696,6 +696,10 @@ function renderSettingsView() {
           <input type="text" class="form-control" id="usernameInput" value="${data.username}">
         </div>
         <div class="mb-3">
+          <label class="form-label">Correo electrónico:</label>
+          <p id="emailDisplay" class="form-control-plaintext">${data.email}</p>
+        </div>
+        <div class="mb-3">
           <p>Victorias: <span id="winsCount">${data.wins ?? 0}</span></p>
           <p>Derrotas: <span id="lossesCount">${data.losses ?? 0}</span></p>
         </div>
@@ -761,7 +765,7 @@ function renderSettingsView() {
         }
       });
 
-      // Guardar cambios
+      // Guardar cambios (solo permite actualizar el nombre y la foto)
       document.getElementById("saveSettingsBtn").addEventListener("click", () => {
         const formData = new FormData();
         const newUsername = document.getElementById("usernameInput").value;
@@ -812,20 +816,17 @@ function renderSettingsView() {
         }
       });
 
-      // 🔄 Cargar historial de partidas completo con scroll
+      // Cargar historial de partidas
       fetch(`${API_BASE_URL}/api/users/match_history/`, {
         headers: { "Authorization": "Bearer " + token }
       })
         .then(res => res.json())
         .then(matches => {
           const container = document.getElementById("matchHistory");
-
           if (!matches.length) {
             container.innerHTML = "<p>No hay partidas registradas.</p>";
             return;
           }
-
-          // Estilos para scroll y altura máxima
           container.style.maxHeight = "300px";
           container.style.overflowY = "auto";
           container.style.border = "1px solid #ccc";
@@ -851,6 +852,7 @@ function renderSettingsView() {
       console.error("Error fetching user details:", err);
     });
 }
+
 
 function renderUserProfileView(username) {
   const token = getToken();
@@ -1321,6 +1323,10 @@ function renderRegisterView() {
               <input type="text" class="form-control" id="username" required>
             </div>
             <div class="mb-3">
+              <label for="email" class="form-label">Correo electrónico</label>
+              <input type="email" class="form-control" id="email" required>
+            </div>
+            <div class="mb-3">
               <label for="password" class="form-label">Contraseña</label>
               <input type="password" class="form-control" id="password" required>
             </div>
@@ -1333,15 +1339,23 @@ function renderRegisterView() {
       </div>
     </div>
   `;
+
   document.getElementById("registerForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const username = document.getElementById("username").value;
+    const email = document.getElementById("email").value;
     const password = document.getElementById("password").value;
+
+    if (!validateEmail(email)) {
+      alert("Por favor, ingresa un correo electrónico válido.");
+      return;
+    }
+
     try {
       const resp = await fetch(`${API_BASE_URL}/api/users/register/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, email, password })
       });
       const data = await resp.json();
       if (resp.ok) {
@@ -1356,6 +1370,13 @@ function renderRegisterView() {
     }
   });
 }
+
+function validateEmail(email) {
+  // Validación básica: se espera un formato con al menos un caracter antes y después de @ y un punto
+  const re = /\S+@\S+\.\S+/;
+  return re.test(email);
+}
+
 
 /****************************************************
  * 5) VISTA PONG (abre pongSocket)
