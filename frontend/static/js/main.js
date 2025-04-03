@@ -317,7 +317,7 @@ function router() {
 
 
 function logout() {
-  clearToken();
+  //clearToken();
   clearUsername();
   closeHomeWS();
   closePongWS();
@@ -1360,8 +1360,11 @@ function renderVerificationView(username) {
       });
       const data = await resp.json();
       if (resp.ok) {
-        alert("¡Cuenta verificada! Ahora inicia sesión.");
-        window.location.hash = "#login";
+        setToken(data.access);
+        setRefreshToken(data.refresh);
+        setUsername(data.user.username);
+        alert("¡Cuenta verificada! Bienvenido.");
+        window.location.hash = "#home";
       } else {
         alert(data.error || "Código incorrecto.");
       }
@@ -1370,6 +1373,20 @@ function renderVerificationView(username) {
       alert("Error al conectar con el servidor.");
     }
   });
+}
+
+async function isTokenValid() {
+  const token = getToken();
+  if (!token) return false;
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/users/me/`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return resp.ok;
+  } catch (e) {
+    return false;
+  }
 }
 
 function renderLoginView() {
@@ -1400,12 +1417,11 @@ function renderLoginView() {
     e.preventDefault();
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
-
     const payload = { username, password };
-    const existingToken = getToken();
 
-    // Solo forzamos verificación si no hay token guardado
-    if (!existingToken || existingToken.length < 10) {
+    // Validar token antes de forzar verificación
+    const token = localStorage.getItem("access_token");
+    if (!token || token === "undefined" || token.length < 20) {
       payload.force_verification = true;
     }
 
@@ -1420,7 +1436,6 @@ function renderLoginView() {
       console.log("Respuesta de login:", data);
 
       if (resp.ok) {
-        // Guardar token y datos del usuario
         if (!data.access || !data.refresh) {
           alert("Faltan los tokens de acceso");
           return;
@@ -1441,6 +1456,7 @@ function renderLoginView() {
     }
   });
 }
+
 
 
 function renderLoginVerificationView(username) {

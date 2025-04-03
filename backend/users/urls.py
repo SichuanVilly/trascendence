@@ -19,6 +19,7 @@ urlpatterns = [
     path("match_history/", MatchHistoryView.as_view(), name="match_history"),
     path("save_match/", SaveMatchView.as_view(), name="save_match"),
     path('profile/<str:username>/', PublicUserProfileView.as_view(), name='user_profile'),
+    path('me/', UserDetailView.as_view(), name='user-detail'),
     #path('online-users/', OnlineUsersView.as_view(), name='online-users'),  # Nueva ruta
 ]
 
