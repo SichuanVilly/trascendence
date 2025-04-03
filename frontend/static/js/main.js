@@ -64,13 +64,14 @@ document.addEventListener('keydown', function(event) {
   }
 });
 
-function setToken(token) {
-  localStorage.setItem("access_token", token);
+function setToken(username, token) {
+  localStorage.setItem(`access_token_${username}`, token);
 }
 
-function getToken() {
-  return localStorage.getItem("access_token");
+function getToken(username) {
+  return localStorage.getItem(`access_token_${username}`);
 }
+
 
 function setRefreshToken(token) {
   localStorage.setItem("refresh_token", token);
@@ -241,36 +242,38 @@ function getHashQueryParams() {
 
 function router() {
   const hash = window.location.hash.replace("#", "");
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
+
   cleanupTournamentSocket();
   updateNavbarVisibility(!!token);
-  
+
   // Cierra el WS de Pong online, si existe
   closePongWS();
-  
+
   // Si la vista actual NO es "game-local", se limpia la vista local
   if (!hash.startsWith("game-local") && typeof window.cleanupLocalGameView === "function") {
     window.cleanupLocalGameView();
   }
-  
+
   // No cerramos el WS de usuarios (userSocket) si se mantiene abierto globalmente.
   if (token && window.location.hash !== "#login" && window.location.hash !== "#register") {
     if (!userSocket || userSocket.readyState !== WebSocket.OPEN) {
       initUsersWebSocket();
     }
   }
+
   if (!token && hash !== "login" && hash !== "register") {
     window.location.hash = "#login";
     return;
   }
-  
+
   if (hash.startsWith("pong")) {
     const roomId = getHashQueryParam("room");
     renderPongView(roomId);
     return;
   }
-  
-  // Si la ruta es chat y hay un parámetro friend, se muestra el chat privado
+
   if (hash.startsWith("chat")) {
     const params = getHashQueryParams();
     if (params.friend) {
@@ -281,7 +284,7 @@ function router() {
       return;
     }
   }
-  
+
   switch (hash) {
     case "login":
       renderLoginView();
@@ -314,6 +317,7 @@ function router() {
       window.location.hash = token ? "#home" : "#login";
   }
 }
+
 
 
 function logout() {
@@ -413,7 +417,9 @@ function updateFriendsList(friends, viewContext = "friends") {
 
 
 function blockFriend(friendName) {
-  const token = getToken();
+
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   fetch(`${API_BASE_URL}/api/users/block-friend/`, {
     method: "POST",
     headers: {
@@ -442,7 +448,10 @@ function blockFriend(friendName) {
 
 
 function unblockFriend(friendName) {
-  const token = getToken();
+
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
+
   fetch(`${API_BASE_URL}/api/users/unblock-friend/`, {
     method: "POST",
     headers: {
@@ -468,7 +477,9 @@ function unblockFriend(friendName) {
 }
 
 function removeFriend(friendToRemove) {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
+
   fetch(`${API_BASE_URL}/api/users/remove-friend/`, {
     method: "POST",
     headers: {
@@ -494,7 +505,8 @@ function removeFriend(friendToRemove) {
 }
 
 function renderFriendsView() {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   const currentUser = getUsername();
   // Establecemos el contexto "friends"
   currentFriendsViewContext = "friends";
@@ -568,7 +580,8 @@ function renderFriendsView() {
 
 
 function renderChatView() {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   fetch(`${API_BASE_URL}/api/users/detail/`, {
     headers: { "Authorization": "Bearer " + token }
   })
@@ -607,7 +620,8 @@ function renderChatView() {
 }
 
 function renderPrivateChatView(friendUsername) {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   // Define el HTML de la ventana de chat privado
   const chatHtml = `
     <h2>Chat con ${friendUsername}</h2>
@@ -684,7 +698,10 @@ function renderPrivateChatView(friendUsername) {
 
 
 function renderSettingsView() {
-  const token = getToken();
+
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
+
   fetch(`${API_BASE_URL}/api/users/detail/`, {
     headers: { "Authorization": "Bearer " + token }
   })
@@ -869,7 +886,8 @@ function renderSettingsView() {
 
 
 function renderUserProfileView(username) {
-  const token = getToken();
+  const usernameyoken = getUsername();
+  const token = usernameyoken ? getToken(usernameyoken) : null;
   // Se asume que este endpoint está definido en el backend y retorna datos públicos del usuario
   fetch(`${API_BASE_URL}/api/users/profile/${username}/`, {
     headers: { "Authorization": "Bearer " + token }
@@ -1000,7 +1018,8 @@ function renderGameIaView() {
  * Inicializa el WebSocket para el modo IA.
  */
 function initPongAiWebSocket(roomId) {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   if (!token) {
     window.location.hash = "#login";
     return;
@@ -1270,6 +1289,13 @@ function renderGameOnlineView() {
  * LOGIN Y REGISTER (con verificación por username)
  ****************************************************/
 
+function validateEmail(email) {
+  const re = /\S+@\S+\.\S+/;
+  return re.test(email);
+}
+
+// ---------------- REGISTRO ----------------
+
 function renderRegisterView() {
   const app = document.getElementById("app");
   app.innerHTML = `
@@ -1352,6 +1378,7 @@ function renderVerificationView(username) {
   document.getElementById("verificationForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const code = document.getElementById("verificationCode").value.trim();
+
     try {
       const resp = await fetch(`${API_BASE_URL}/api/users/verify/`, {
         method: "POST",
@@ -1360,7 +1387,7 @@ function renderVerificationView(username) {
       });
       const data = await resp.json();
       if (resp.ok) {
-        setToken(data.access);
+        setToken(username, data.access);
         setRefreshToken(data.refresh);
         setUsername(data.user.username);
         alert("¡Cuenta verificada! Bienvenido.");
@@ -1375,19 +1402,7 @@ function renderVerificationView(username) {
   });
 }
 
-async function isTokenValid() {
-  const token = getToken();
-  if (!token) return false;
-
-  try {
-    const resp = await fetch(`${API_BASE_URL}/api/users/me/`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return resp.ok;
-  } catch (e) {
-    return false;
-  }
-}
+// ---------------- LOGIN ----------------
 
 function renderLoginView() {
   const app = document.getElementById("app");
@@ -1417,11 +1432,11 @@ function renderLoginView() {
     e.preventDefault();
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
-    const payload = { username, password };
 
-    // Validar token antes de forzar verificación
-    const token = localStorage.getItem("access_token");
-    if (!token || token === "undefined" || token.length < 20) {
+    const payload = { username, password };
+    const existingToken = getToken(username);
+
+    if (!existingToken || existingToken.length < 10) {
       payload.force_verification = true;
     }
 
@@ -1433,14 +1448,13 @@ function renderLoginView() {
       });
 
       const data = await resp.json();
-      console.log("Respuesta de login:", data);
 
       if (resp.ok) {
         if (!data.access || !data.refresh) {
           alert("Faltan los tokens de acceso");
           return;
         }
-        setToken(data.access);
+        setToken(username, data.access);
         setRefreshToken(data.refresh);
         setUsername(data.user?.username || username);
         window.location.hash = "#home";
@@ -1456,8 +1470,6 @@ function renderLoginView() {
     }
   });
 }
-
-
 
 function renderLoginVerificationView(username) {
   const app = document.getElementById("app");
@@ -1498,8 +1510,7 @@ function renderLoginVerificationView(username) {
           alert("No se recibieron los tokens correctamente");
           return;
         }
-
-        setToken(data.access);
+        setToken(username, data.access);
         setRefreshToken(data.refresh);
         setUsername(data.user.username);
         alert("¡Verificación exitosa!");
@@ -1514,11 +1525,6 @@ function renderLoginVerificationView(username) {
   });
 }
 
-
-function validateEmail(email) {
-  const re = /\S+@\S+\.\S+/;
-  return re.test(email);
-}
 
 
 
@@ -1571,7 +1577,8 @@ function closePongWS() {
 }
 
 function initPongWebSocket(roomId) {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   const currentUser = getUsername();
   if (!token || !currentUser) {
     window.location.hash = "#login";
@@ -1784,7 +1791,8 @@ function displayGameOver(gameData) {
 
 
 function updateMyStats(statType) {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   fetch(`${API_BASE_URL}/api/users/update_my_stat/`, {
     method: "POST",
     headers: {
@@ -1803,7 +1811,8 @@ function updateMyStats(statType) {
 }
 
 function saveMatchResult(player1, player2, score1, score2, winner) {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   fetch(`${API_BASE_URL}/api/users/save_match/`, {
     method: "POST",
     headers: {
@@ -1840,7 +1849,8 @@ function saveMatchResult(player1, player2, score1, score2, winner) {
  * WS Y FUNCIONES PARA CHAT, INVITACIONES, etc.
  ****************************************************/
 function initUsersWebSocket() {
-  const token = getToken();
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
   const currentUser = getUsername();
   if (!token || !currentUser) return;
   const wsUrl = `${WS_BASE_URL}/ws/online_users/?token=${token}`;
@@ -1899,7 +1909,8 @@ function initUsersWebSocket() {
 
   function pollFriendsList() {
     console.log("Ejecutando pollFriendsList...");
-    const token = getToken();
+    const usernametoken = getUsername();
+    const token = usernametoken ? getToken(usernametoken) : null;
     fetch(`${API_BASE_URL}/api/users/detail/`, {
       headers: { "Authorization": "Bearer " + token }
     })

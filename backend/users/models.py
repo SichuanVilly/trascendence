@@ -2,10 +2,12 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+import uuid
 
 class CustomUser(AbstractUser):
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, default='avatars/default_avatar.png')
     email = models.EmailField(unique=False)
+    verification_token = models.UUIDField(default=uuid.uuid4, editable=False)
     # Campos adicionales
     wins = models.IntegerField(default=0)
     losses = models.IntegerField(default=0)

@@ -39,6 +39,9 @@ from rest_framework.permissions import AllowAny
 from .serializers import UserSerializer
 from .models import PendingRegistration
 
+import uuid
+from uuid import uuid4
+
 class RegisterView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
     serializer_class = UserSerializer
@@ -102,26 +105,33 @@ class VerifyCodeView(APIView):
         except PendingRegistration.DoesNotExist:
             return Response({"error": "No se encontró registro pendiente para este usuario."},
                             status=status.HTTP_404_NOT_FOUND)
+
         if pending.expires_at < timezone.now():
             pending.delete()
             return Response({"error": "El código ha expirado. Por favor, regístrate nuevamente."},
                             status=status.HTTP_400_BAD_REQUEST)
+
         if pending.code != code:
             return Response({"error": "El código es incorrecto."},
                             status=status.HTTP_400_BAD_REQUEST)
-        # Código correcto: crear el usuario
+
+        # Crear usuario y asignar verification_token
         user = User.objects.create(
             username=pending.username,
             email=pending.email,
             password=pending.password,
-            is_active=True
+            is_active=True,
+            verification_token=uuid.uuid4()
         )
+
         refresh = RefreshToken.for_user(user)
         pending.delete()
+
         return Response({
             "user": UserSerializer(user).data,
             "access": str(refresh.access_token),
-            "refresh": str(refresh)
+            "refresh": str(refresh),
+            "verification_token": str(user.verification_token)
         }, status=status.HTTP_200_OK)
 
 
@@ -136,68 +146,71 @@ class LoginView(APIView):
         force_verification = request.data.get("force_verification", False)
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = authenticate(
-            username=serializer.validated_data["username"],
-            password=serializer.validated_data["password"],
-        )
+
+        username = serializer.validated_data["username"]
+        password = serializer.validated_data["password"]
+        user = authenticate(username=username, password=password)
+
         if user is not None:
-            if force_verification or not user.is_active:
-                code = f"{random.randint(100000, 999999)}"
-                expires_at = timezone.now() + timedelta(minutes=10)
-                PendingRegistration.objects.update_or_create(
-                    username=user.username,
-                    defaults={
-                        "email": user.email,
-                        "password": user.password,
-                        "code": code,
-                        "expires_at": expires_at,
-                    }
-                )
-                try:
-                    send_mail(
-                        'Verifica tu inicio de sesión',
-                        f'Tu código de verificación para el login es: {code}',
-                        'transcendencepong42@gmail.com',
-                        [user.email],
-                        fail_silently=False,
-                    )
-                except Exception as e:
-                    return Response(
-                        {"error": "No se pudo enviar el correo de verificación."},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-                return Response(
-                    {
-                        "error": "Verificación requerida. Se ha enviado un código a tu correo.",
-                        "user": {"username": user.username}
-                    },
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            else:
+            # ✅ Login directo si ya tiene verification_token y no se forza verificación
+            if not force_verification and user.verification_token:
                 refresh = RefreshToken.for_user(user)
                 return Response({
                     "user": UserSerializer(user).data,
                     "refresh": str(refresh),
                     "access": str(refresh.access_token),
                 }, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+            # ❗ Enviar código si no tiene token o si se fuerza verificación
+            code = f"{random.randint(100000, 999999)}"
+            expires_at = timezone.now() + timedelta(minutes=10)
+
+            PendingRegistration.objects.update_or_create(
+                username=user.username,
+                defaults={
+                    "email": user.email,
+                    "password": user.password,
+                    "code": code,
+                    "expires_at": expires_at,
+                }
+            )
+
+            try:
+                send_mail(
+                    'Verifica tu inicio de sesión',
+                    f'Tu código de verificación para el login es: {code}',
+                    'transcendencepong42@gmail.com',
+                    [user.email],
+                    fail_silently=False,
+                )
+            except Exception:
+                return Response(
+                    {"error": "No se pudo enviar el correo de verificación."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            return Response({
+                "error": "Verificación requerida. Se ha enviado un código a tu correo.",
+                "user": {"username": user.username}
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        return Response({"error": "Credenciales inválidas"}, status=status.HTTP_401_UNAUTHORIZED)
+
+
 
 class LoginVerifyView(APIView):
-    """
-    Este endpoint recibe el username y el código de verificación para el login.
-    Si el código es correcto y no ha expirado, se generan y devuelven los tokens JWT.
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):
         username = request.data.get("username")
         code = request.data.get("code")
+
         if not username or not code:
             return Response(
                 {"error": "Se requieren 'username' y 'code'."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
         try:
             pending = PendingRegistration.objects.get(username=username)
         except PendingRegistration.DoesNotExist:
@@ -205,25 +218,34 @@ class LoginVerifyView(APIView):
                 {"error": "No se encontró verificación pendiente para este usuario."},
                 status=status.HTTP_404_NOT_FOUND
             )
+
         if pending.expires_at < timezone.now():
             pending.delete()
             return Response(
                 {"error": "El código ha expirado. Por favor, inicia sesión nuevamente."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
         if pending.code != code:
             return Response(
                 {"error": "El código es incorrecto."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        # Código correcto: emitir tokens JWT
+
         user = User.objects.get(username=username)
         refresh = RefreshToken.for_user(user)
-        pending.delete()  # Eliminar el registro pendiente tras la verificación exitosa
+
+        # Asignar nuevo verification_token
+        user.verification_token = uuid.uuid4()
+        user.save()
+
+        pending.delete()
+
         return Response({
             "user": UserSerializer(user).data,
             "access": str(refresh.access_token),
-            "refresh": str(refresh)
+            "refresh": str(refresh),
+            "verification_token": str(user.verification_token)
         }, status=status.HTTP_200_OK)
 
 class UserDetailView(APIView):
