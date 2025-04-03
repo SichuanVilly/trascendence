@@ -268,6 +268,13 @@ function router() {
     return;
   }
 
+  // Activar polling solo en friends y chat
+  if (hash.startsWith("friends") || hash.startsWith("chat")) {
+    startPollingFriendsList();
+  } else {
+    stopPollingFriendsList();
+  }
+
   if (hash.startsWith("pong")) {
     const roomId = getHashQueryParam("room");
     renderPongView(roomId);
@@ -284,6 +291,7 @@ function router() {
       return;
     }
   }
+
 
   switch (hash) {
     case "login":
@@ -325,6 +333,8 @@ function logout() {
   clearUsername();
   closeHomeWS();
   closePongWS();
+  cleanupTournamentSocket();
+  stopPollingFriendsList();
   window.location.hash = "#login";
 }
 
@@ -1906,35 +1916,50 @@ function initUsersWebSocket() {
       ul.appendChild(li);
     });
   }
-
-  function pollFriendsList() {
-    console.log("Ejecutando pollFriendsList...");
-    const usernametoken = getUsername();
-    const token = usernametoken ? getToken(usernametoken) : null;
-    fetch(`${API_BASE_URL}/api/users/detail/`, {
-      headers: { "Authorization": "Bearer " + token }
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.friends) {
-          let context = currentFriendsViewContext;
-          if (!context) {
-            if (window.location.hash.includes("chat")) {
-              context = "chat";
-            } else if (window.location.hash.includes("friends")) {
-              context = "friends";
-            } else {
-              context = "friends"; // Valor por defecto
-            }
-          }
-          updateFriendsList(data.friends, context);
-        }
-      })
-      .catch(err => console.error("Error polling friend list:", err));
-  }
-  
-  setInterval(pollFriendsList, 1000);
 }
+
+
+let friendsPollingInterval = null;
+
+function pollFriendsList() {
+  console.log("Ejecutando pollFriendsList...");
+  const usernametoken = getUsername();
+  const token = usernametoken ? getToken(usernametoken) : null;
+  fetch(`${API_BASE_URL}/api/users/detail/`, {
+    headers: { "Authorization": "Bearer " + token }
+  })
+    .then(response => response.json())
+    .then(data => {
+      if (data.friends) {
+        let context = currentFriendsViewContext;
+        if (!context) {
+          if (window.location.hash.includes("chat")) {
+            context = "chat";
+          } else if (window.location.hash.includes("friends")) {
+            context = "friends";
+          } else {
+            context = "friends";
+          }
+        }
+        updateFriendsList(data.friends, context);
+      }
+    })
+    .catch(err => console.error("Error polling friend list:", err));
+}
+
+function startPollingFriendsList() {
+  if (friendsPollingInterval) return; 
+  friendsPollingInterval = setInterval(pollFriendsList, 1000);
+}
+
+function stopPollingFriendsList() {
+  if (friendsPollingInterval) {
+    clearInterval(friendsPollingInterval);
+    friendsPollingInterval = null;
+  }
+}
+
+
 
 function inviteUser(toUser, fromUser) {
   document.getElementById("inviteModalTitle").textContent = `Invitar a ${toUser}`;
