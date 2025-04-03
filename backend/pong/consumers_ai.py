@@ -116,22 +116,17 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
         """
         Cada 1 segundo, la IA predice la trayectoria
         y decide a dónde colocar la pala derecha.
-        Con 1/5 de probabilidad “falla” y elige
-        un objetivo aleatorio.
+        Con 1/5 de probabilidad “falla” y elige un objetivo aleatorio.
         """
         try:
             while True:
                 await asyncio.sleep(1.0)
 
-                # 1) 1/10 chance de fallar
-                chance = random.random()  # Valor en [0..1)
+                chance = random.random()  # Valor en [0,1)
                 if chance < 0.1:
-                    # IA se equivoca: objetivo aleatorio en [0..100]
-                    # De este modo a veces no ataja la pelota
                     self.ai_target = random.uniform(0, 100)
                     logging.debug(f"🤖 IA => HA FALLADO INTENCIONALMENTE. target={self.ai_target:.2f}")
                 else:
-                    # IA se comporta normal => predice la trayectoria
                     predicted = self.predict_ball_y_assuming_rebound()
                     if predicted is not None:
                         error = random.uniform(-3, 3)
@@ -139,22 +134,18 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
                     else:
                         self.ai_target = self.paddle_right
                     logging.debug(f"🤖 IA => target={self.ai_target:.2f}")
-
         except asyncio.CancelledError:
             logging.debug("🚫 ai_loop cancelado (socket cerrado).")
 
     def predict_ball_y_assuming_rebound(self):
         """
-        Si vx<0 => la pelota va a x=5, rebota,
-        luego vx>0 => va a x=95. 
-        Devuelve Y final o None si se vuelve a la izquierda antes.
+        Simula la trayectoria de la pelota y devuelve la posición Y final.
         """
         sim_x = self.ball_x
         sim_y = self.ball_y
         vx = self.ball_vx
         vy = self.ball_vy
 
-        # Fase 1: si vx<0 => simulamos hasta x=5
         if vx < 0:
             while sim_x > 5:
                 sim_x += vx
@@ -167,7 +158,6 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
                     vy = -vy
             vx = abs(vx)
 
-        # Fase 2: ahora vx>0 => hasta x=95
         while sim_x < 95:
             sim_x += vx
             sim_y += vy
@@ -177,7 +167,6 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
             elif sim_y >= 100:
                 sim_y = 200 - sim_y
                 vy = -vy
-
             if vx < 0:
                 return None
         return sim_y
@@ -191,52 +180,57 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
         """
         try:
             max_score = 5
+            ball_radius = 1.25  # 10px de 800 = 1.25%
+            # Definimos la posición de las palas (en porcentaje)
+            left_paddle_x = 5
+            right_paddle_x = 95
+            left_paddle_width = 1.25
+            right_paddle_width = 1.25
+
             while True:
-                # Mover pelota
+                # Mueve la pelota
                 self.ball_x += self.ball_vx
                 self.ball_y += self.ball_vy
 
-                # Mover pala izquierda
+                # Mueve la pala izquierda
                 self.paddle_left += self.paddle_left_speed
                 self.paddle_left = max(self.PADDLE_HALF, min(100 - self.PADDLE_HALF, self.paddle_left))
 
-                # Pala derecha => se acerca a ai_target
-                dist = self.ai_target - self.paddle_right
-                if abs(dist) < 0.5:
+                # Mueve la pala derecha: la IA se acerca al target
+                let_dist = self.ai_target - self.paddle_right
+                if abs(let_dist) < 0.5:
                     self.paddle_right = self.ai_target
                 else:
-                    move = max(min(dist, self.MAX_SPEED_PER_FRAME), -self.MAX_SPEED_PER_FRAME)
+                    move = max(min(let_dist, self.MAX_SPEED_PER_FRAME), -self.MAX_SPEED_PER_FRAME)
                     self.paddle_right += move
-
                 self.paddle_right = max(self.PADDLE_HALF, min(100 - self.PADDLE_HALF, self.paddle_right))
 
-                # Rebotes verticales
+                # Rebote vertical
                 if self.ball_y <= 0 or self.ball_y >= 100:
                     self.ball_vy *= -1
 
-                # Gol a la derecha
-                if self.ball_x <= 0:
+                # Anotación: gol a la izquierda o derecha
+                if self.ball_x - ball_radius <= 0:
                     self.score_right += 1
                     self.reset_ball(right_side=True)
-
-                # Gol a la izquierda
-                if self.ball_x >= 100:
+                elif self.ball_x + ball_radius >= 100:
                     self.score_left += 1
                     self.reset_ball(right_side=False)
+                else:
+                    # Colisión con la pala izquierda
+                    if self.ball_x - ball_radius <= left_paddle_x + left_paddle_width:
+                        if abs(self.ball_y - self.paddle_left) <= self.PADDLE_HALF:
+                            self.ball_vx = abs(self.ball_vx)
+                            self.ball_x = left_paddle_x + left_paddle_width + ball_radius
+                            self.speed_up_ball()
+                    # Colisión con la pala derecha
+                    if self.ball_x + ball_radius >= right_paddle_x - right_paddle_width:
+                        if abs(self.ball_y - self.paddle_right) <= self.PADDLE_HALF:
+                            self.ball_vx = -abs(self.ball_vx)
+                            self.ball_x = right_paddle_x - right_paddle_width - ball_radius
+                            self.speed_up_ball()
 
-                # Colisión con pala izquierda
-                if self.ball_x < 5:
-                    if self.check_paddle_collision(self.paddle_left):
-                        self.ball_vx *= -1
-                        self.speed_up_ball()
-
-                # Colisión con pala derecha
-                if self.ball_x > 95:
-                    if self.check_paddle_collision(self.paddle_right):
-                        self.ball_vx *= -1
-                        self.speed_up_ball()
-
-                # Emitir "game_update"
+                # Envía el estado actual al cliente
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -276,7 +270,7 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
 
     def check_paddle_collision(self, paddle_center):
         """
-        Retorna True si la pelota colisiona con la pala (paddle_center).
+        Retorna True si la pelota colisiona con la pala centrada en paddle_center.
         """
         min_paddle = paddle_center - self.PADDLE_HALF
         max_paddle = paddle_center + self.PADDLE_HALF
@@ -284,21 +278,17 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
 
     def speed_up_ball(self):
         """
-        Aumenta la velocidad de la pelota (vx, vy) en ±0.01 
-        según su dirección actual.
+        Aumenta la velocidad de la pelota (vx, vy) en ±0.01 según su dirección actual.
         """
         increment = 0.01
-        # Ajustar vx
         if self.ball_vx > 0:
             self.ball_vx += increment
         else:
             self.ball_vx -= increment
-        # Ajustar vy
         if self.ball_vy > 0:
             self.ball_vy += increment
         else:
             self.ball_vy -= increment
-
         logging.debug(f"⚡ Ball speed up => vx={self.ball_vx:.2f}, vy={self.ball_vy:.2f}")
 
     def reset_ball(self, right_side=True):
@@ -319,10 +309,6 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
     # Handlers group_send
     # ======================================================
     async def update_paddle(self, event):
-        """
-        (Opcional) si se manda un "update_paddle" vía group_send,
-        se reenvía aquí al front.
-        """
         which_paddle = event["which"]
         position = event["position"]
         await self.send(text_data=json.dumps({
@@ -332,16 +318,10 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
         }))
 
     async def game_update(self, event):
-        """
-        Reenvía 'game_update' al front.
-        """
         data = event["data"]
         await self.send(text_data=json.dumps(data))
 
     async def game_over(self, event):
-        """
-        Notifica el final de la partida.
-        """
         data = event["data"]
         if self.ai_task:
             self.ai_task.cancel()
@@ -350,9 +330,6 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(data))
 
     async def send_initial_state(self):
-        """
-        Envía el estado inicial.
-        """
         await self.send(text_data=json.dumps({
             "type": "initial_state",
             "paddle_left": self.paddle_left,
@@ -360,5 +337,5 @@ class PongAIGameConsumer(AsyncWebsocketConsumer):
             "ball_x": self.ball_x,
             "ball_y": self.ball_y,
             "score_left": self.score_left,
-            "score_right": self.score_right
+            "score_right": self.score_right,
         }))

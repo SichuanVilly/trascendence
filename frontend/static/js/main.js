@@ -165,9 +165,6 @@ function renderLayout(contentHtml) {
                   <li class="nav-item">
                     <a class="nav-link text-white" href="#game-local">Local</a>
                   </li>
-                  <li class="nav-item">
-                    <a class="nav-link text-white" href="#game-online">Online</a>
-                  </li>
                 </ul>
               </div>
             </li>
@@ -289,9 +286,6 @@ function router() {
       break;
     case "game-local":
       renderGameLocalView();
-      break;
-    case "game-online":
-      renderGameOnlineView();
       break;
     case "tournament":
       renderTournamentView();
@@ -2126,27 +2120,11 @@ function cleanupLocalGameView() {
 window.cleanupLocalGameView = cleanupLocalGameView;
 
 
-/**
- * Muestra la vista inicial del torneo con el botón "4 Players".
- */
-function renderTournamentView() {
-  const contentHtml = `
-    <h2>Torneo Local</h2>
-    <div class="text-center mt-4">
-      <button id="btn4Players" class="btn btn-primary">4 Players</button>
-    </div>
-  `;
-  renderLayout(contentHtml);
-  
-  document.getElementById("btn4Players").addEventListener("click", () => {
-    renderTournamentForm();
-  });
-}
 
 /**
  * Muestra el formulario para registrar los 4 jugadores.
  */
-function renderTournamentForm() {
+function renderTournamentView() {
   const formHtml = `
     <div id="tournamentForm" class="mt-4">
       <h3>Registro de Jugadores</h3>
