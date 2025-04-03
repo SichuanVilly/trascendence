@@ -1,10 +1,12 @@
 from django.urls import path, include
-from .views import RegisterView, LoginView, UserDetailView, OnlineUsersView, UserUpdateView, UserDetailView, UserDeleteView, AddFriendView, RemoveFriendView, BlockFriendView, UnblockFriendView, update_my_stat, MatchHistoryView, SaveMatchView,  PublicUserProfileView
+from .views import RegisterView, LoginView, UserDetailView, OnlineUsersView, UserUpdateView, UserDetailView, UserDeleteView, AddFriendView, RemoveFriendView, BlockFriendView, UnblockFriendView, update_my_stat, MatchHistoryView, SaveMatchView,  PublicUserProfileView, VerifyCodeView, LoginVerifyView
 from backend.views import pong_room  # Importa la vista de la sala
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
+    path('verify/', VerifyCodeView.as_view(), name='verify'),
     path("login/", LoginView.as_view(), name="login"),
+    path('login/verify/', LoginVerifyView.as_view(), name='login-verify'),
     path('api/pong/', include('pong.urls')),
     path('update/', UserUpdateView.as_view(), name='user-update'),
     path('detail/', UserDetailView.as_view(), name='user-detail'),

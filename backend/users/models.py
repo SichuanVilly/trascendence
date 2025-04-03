@@ -1,7 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
-
+from django.utils import timezone
 
 class CustomUser(AbstractUser):
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, default='avatars/default_avatar.png')
@@ -28,3 +28,17 @@ class MatchHistory(models.Model):
 
     def __str__(self):
         return f"{self.player1.username} vs {self.player2.username} ({self.score1} - {self.score2})"
+
+class PendingRegistration(models.Model):
+    username = models.CharField(max_length=150, unique=True)
+    email = models.EmailField()
+    password = models.CharField(max_length=128)  # Se almacenará la contraseña encriptada
+    code = models.CharField(max_length=6)  # Código de 6 dígitos
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return self.username

@@ -27,7 +27,6 @@ HOST_IP = os.getenv("HOST_IP", "localhost")
 # Se agregan 'localhost' y '127.0.0.1' para evitar problemas en Docker
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", HOST_IP]
 
-
 # Modelo de usuario personalizado
 AUTH_USER_MODEL = 'users.CustomUser'
 
@@ -79,7 +78,6 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://{HOST_IP}:3000",
     "http://192.168.1.156:3000",
-
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -139,9 +137,8 @@ REST_FRAMEWORK = {
 # Ajusta los tiempos de vigencia a tu gusto
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),  # Ej: 15 min
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),     # Ej: 1 día
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),  # Ej: 1 día
 }
-
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -156,3 +153,18 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ----------------------------
+# Configuración de Envío de Correos SMTP
+# ----------------------------
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_HOST_USER = "transcendencepong42@gmail.com"
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "ydizfvjhmincbaew")
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = "transcendencepong42@gmail.com"
+
+
+# Si usas SSL, podrías configurar EMAIL_USE_SSL en su lugar:
+# EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False") == "True"

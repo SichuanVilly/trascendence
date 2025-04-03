@@ -64,25 +64,39 @@ document.addEventListener('keydown', function(event) {
   }
 });
 
-function getToken() {
-  return localStorage.getItem("token");
-}
 function setToken(token) {
-  localStorage.setItem("token", token);
+  localStorage.setItem("access_token", token);
 }
+
+function getToken() {
+  return localStorage.getItem("access_token");
+}
+
+function setRefreshToken(token) {
+  localStorage.setItem("refresh_token", token);
+}
+
+function getRefreshToken() {
+  return localStorage.getItem("refresh_token");
+}
+
 function clearToken() {
-  localStorage.removeItem("token");
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+}
+
+function setUsername(username) {
+  localStorage.setItem("username", username);
 }
 
 function getUsername() {
   return localStorage.getItem("username");
 }
-function setUsername(username) {
-  localStorage.setItem("username", username);
-}
+
 function clearUsername() {
   localStorage.removeItem("username");
 }
+
 
 // Extraer parámetros después de "#pong?room=..."
 function getHashQueryParam(param) {
@@ -1253,62 +1267,8 @@ function renderGameOnlineView() {
 }
 
 /****************************************************
- * 5) LOGIN Y REGISTER (Sin sidebar)
+ * LOGIN Y REGISTER (con verificación por username)
  ****************************************************/
-function renderLoginView() {
-  const app = document.getElementById("app");
-  app.innerHTML = `
-    <div class="row justify-content-center mt-5">
-      <div class="col-md-4">
-        <div class="card p-4 shadow">
-          <h3 class="card-title text-center mb-3">Iniciar sesión</h3>
-          <form id="loginForm">
-            <div class="mb-3">
-              <label for="username" class="form-label">Usuario</label>
-              <input type="text" class="form-control" id="username" required>
-            </div>
-            <div class="mb-3">
-              <label for="password" class="form-label">Contraseña</label>
-              <input type="password" class="form-control" id="password" required>
-            </div>
-            <button type="submit" class="btn btn-primary w-100">Ingresar</button>
-          </form>
-          <p class="text-center mt-3">
-            ¿No tienes cuenta? <a href="#register">Regístrate</a>
-          </p>
-        </div>
-      </div>
-    </div>
-  `;
-  document.getElementById("loginForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const username = document.getElementById("username").value;
-    const password = document.getElementById("password").value;
-    try {
-      const resp = await fetch(`${API_BASE_URL}/api/users/login/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        const token = data.access || data.token;
-        if (!token) {
-          alert("No se recibió token");
-          return;
-        }
-        setToken(token);
-        setUsername(data.username || username);
-        window.location.hash = "#home";
-      } else {
-        alert(data.error || "Error al iniciar sesión");
-      }
-    } catch (err) {
-      console.error("Error login:", err);
-      alert("Error en la conexión al servidor");
-    }
-  });
-}
 
 function renderRegisterView() {
   const app = document.getElementById("app");
@@ -1332,9 +1292,7 @@ function renderRegisterView() {
             </div>
             <button type="submit" class="btn btn-primary w-100">Registrarse</button>
           </form>
-          <p class="text-center mt-3">
-            ¿Ya tienes cuenta? <a href="#login">Inicia sesión</a>
-          </p>
+          <p class="text-center mt-3">¿Ya tienes cuenta? <a href="#login">Inicia sesión</a></p>
         </div>
       </div>
     </div>
@@ -1359,8 +1317,8 @@ function renderRegisterView() {
       });
       const data = await resp.json();
       if (resp.ok) {
-        alert("Registro exitoso, ahora puedes iniciar sesión");
-        window.location.hash = "#login";
+        alert("Registro exitoso. Se ha enviado un código de verificación.");
+        renderVerificationView(username);
       } else {
         alert(data.error || "Error en el registro");
       }
@@ -1371,11 +1329,182 @@ function renderRegisterView() {
   });
 }
 
+function renderVerificationView(username) {
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="row justify-content-center mt-5">
+      <div class="col-md-4">
+        <div class="card p-4 shadow">
+          <h3 class="card-title text-center mb-3">Verificación de Cuenta</h3>
+          <p class="text-center">Se ha enviado un código al correo de <strong>${username}</strong>.</p>
+          <form id="verificationForm">
+            <div class="mb-3">
+              <label for="verificationCode" class="form-label">Código de verificación</label>
+              <input type="text" class="form-control" id="verificationCode" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Verificar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("verificationForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = document.getElementById("verificationCode").value.trim();
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/users/verify/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, code })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        alert("¡Cuenta verificada! Ahora inicia sesión.");
+        window.location.hash = "#login";
+      } else {
+        alert(data.error || "Código incorrecto.");
+      }
+    } catch (err) {
+      console.error("Error verificación:", err);
+      alert("Error al conectar con el servidor.");
+    }
+  });
+}
+
+function renderLoginView() {
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="row justify-content-center mt-5">
+      <div class="col-md-4">
+        <div class="card p-4 shadow">
+          <h3 class="card-title text-center mb-3">Iniciar sesión</h3>
+          <form id="loginForm">
+            <div class="mb-3">
+              <label for="username" class="form-label">Usuario</label>
+              <input type="text" class="form-control" id="username" required>
+            </div>
+            <div class="mb-3">
+              <label for="password" class="form-label">Contraseña</label>
+              <input type="password" class="form-control" id="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Ingresar</button>
+          </form>
+          <p class="text-center mt-3">¿No tienes cuenta? <a href="#register">Regístrate</a></p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+
+    const payload = { username, password };
+    const existingToken = getToken();
+
+    // Solo forzamos verificación si no hay token guardado
+    if (!existingToken || existingToken.length < 10) {
+      payload.force_verification = true;
+    }
+
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/users/login/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+      console.log("Respuesta de login:", data);
+
+      if (resp.ok) {
+        // Guardar token y datos del usuario
+        if (!data.access || !data.refresh) {
+          alert("Faltan los tokens de acceso");
+          return;
+        }
+        setToken(data.access);
+        setRefreshToken(data.refresh);
+        setUsername(data.user?.username || username);
+        window.location.hash = "#home";
+      } else if (resp.status === 403 && data.user?.username) {
+        alert(data.error);
+        renderLoginVerificationView(data.user.username);
+      } else {
+        alert(data.error || "Error al iniciar sesión.");
+      }
+    } catch (err) {
+      console.error("Error login:", err);
+      alert("Error en la conexión al servidor");
+    }
+  });
+}
+
+
+function renderLoginVerificationView(username) {
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="row justify-content-center mt-5">
+      <div class="col-md-4">
+        <div class="card p-4 shadow">
+          <h3 class="card-title text-center mb-3">Verificación de Inicio de Sesión</h3>
+          <p class="text-center">
+            Se ha enviado un código al correo asociado a <strong>${username}</strong>. Ingresa el código para continuar.
+          </p>
+          <form id="loginVerificationForm">
+            <div class="mb-3">
+              <label for="verificationCode" class="form-label">Código de verificación</label>
+              <input type="text" class="form-control" id="verificationCode" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Verificar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("loginVerificationForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = document.getElementById("verificationCode").value.trim();
+
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/users/login/verify/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, code }),
+      });
+
+      const data = await resp.json();
+      if (resp.ok) {
+        if (!data.access || !data.refresh) {
+          alert("No se recibieron los tokens correctamente");
+          return;
+        }
+
+        setToken(data.access);
+        setRefreshToken(data.refresh);
+        setUsername(data.user.username);
+        alert("¡Verificación exitosa!");
+        window.location.hash = "#home";
+      } else {
+        alert(data.error || "Código incorrecto.");
+      }
+    } catch (err) {
+      console.error("Error en la verificación:", err);
+      alert("Error en la conexión al servidor.");
+    }
+  });
+}
+
+
 function validateEmail(email) {
-  // Validación básica: se espera un formato con al menos un caracter antes y después de @ y un punto
   const re = /\S+@\S+\.\S+/;
   return re.test(email);
 }
+
+
 
 
 /****************************************************
