@@ -1,7 +1,7 @@
 # Makefile para iniciar todo el proyecto con Docker
 
 # Variables
-DOCKER_COMPOSE = sudo docker-compose
+DOCKER_COMPOSE = docker-compose
 
 # Construye y levanta los contenedores, asegurando que se ejecuten las migraciones
 up:

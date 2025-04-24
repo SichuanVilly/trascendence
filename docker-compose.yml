@@ -4,10 +4,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: transcendence_backend
-    entrypoint: ["/app/entrypoint.sh"]  # Ejecuta el script de inicialización
+    # entrypoint: ["/app/entrypoint.sh"]  # Ejecuta el script de inicialización
     environment:
       DJANGO_SETTINGS_MODULE: "backend.settings"
-      HOST_IP: "192.168.1.156"
+      HOST_IP: "10.12.17.6"
       ALLOWED_HOSTS: '*'
       DATABASE_URL: postgres://postgres:postgres@transcendence_db:5432/transcendence_db
       DEBUG: "1"
@@ -60,7 +60,7 @@ services:
     container_name: transcendence_redis
     restart: always
     ports:
-      - "6379:6379"
+      - "6389:6379"
 
 volumes:
   postgres_data:

@@ -21,4 +21,4 @@ RUN chmod +x /app/entrypoint.sh
 EXPOSE 8000
 
 # Usamos el entrypoint.sh para manejar la inicialización
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["sh","/app/entrypoint.sh"]
