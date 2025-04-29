@@ -11,3 +11,4 @@ Pillow
 djangorestframework-simplejwt
 users
 django-cors-headers
+python-dotenv
