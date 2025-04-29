@@ -29,14 +29,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: transcendence_backend
-<<<<<<< HEAD
-=======
     volumes:
       - ./backend:/app
       # monta aquí los certificados:
       - ./selfsigned.crt:/etc/ssl/certs/selfsigned.crt:ro
       - ./selfsigned.key:/etc/ssl/private/selfsigned.key:ro
->>>>>>> temp-branch
     environment:
       DJANGO_SETTINGS_MODULE: "backend.settings"
       ALLOWED_HOSTS: '*'
@@ -60,17 +57,6 @@ services:
       "
     restart: always
 
-<<<<<<< HEAD
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: transcendence_frontend
-    #ports:
-      #- "3000:80"
-    volumes:
-      - ./frontend:/usr/share/nginx/html
-=======
 
   nginx:
     image: nginx:alpine
@@ -78,7 +64,6 @@ services:
     ports:
       - "80:80"
       - "443:443"
->>>>>>> temp-branch
     depends_on:
       - backend
     volumes:
@@ -88,21 +73,6 @@ services:
       - ./selfsigned.key:/etc/ssl/private/selfsigned.key
     restart: always
 
-
-  nginx:
-    image: nginx:latest
-    container_name: transcendence_nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./frontend:/usr/share/nginx/html
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-      - ./selfsigned.crt:/etc/ssl/certs/selfsigned.crt
-      - ./selfsigned.key:/etc/ssl/private/selfsigned.key
-    depends_on:
-      - backend
-    restart: always
 
 
 volumes:
