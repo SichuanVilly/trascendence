@@ -4,7 +4,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: transcendence_backend
-    # entrypoint: ["/app/entrypoint.sh"]  # Ejecuta el script de inicialización
     environment:
       DJANGO_SETTINGS_MODULE: "backend.settings"
       HOST_IP: "10.12.17.6"
@@ -12,7 +11,7 @@ services:
       DATABASE_URL: postgres://postgres:postgres@transcendence_db:5432/transcendence_db
       DEBUG: "1"
       SECRET_KEY: mysecretkey
-      REDIS_URL: redis://transcendence_redis:6379/0  # Asegura la conexión a Redis
+      REDIS_URL: redis://transcendence_redis:6379/0
     depends_on:
       db:
         condition: service_healthy
@@ -27,12 +26,12 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile  # Dockerfile basado en Nginx para archivos estáticos
+      dockerfile: Dockerfile
     container_name: transcendence_frontend
-    ports:
-      - "3000:80"  # Mapea el puerto 80 del contenedor al 3000 del host
+    #ports:
+      #- "3000:80"
     volumes:
-      - ./frontend:/usr/share/nginx/html  # Monta la carpeta de archivos estáticos en Nginx
+      - ./frontend:/usr/share/nginx/html
     depends_on:
       - backend
     restart: always
@@ -61,6 +60,22 @@ services:
     restart: always
     ports:
       - "6389:6379"
+
+  nginx:
+    image: nginx:latest
+    container_name: transcendence_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./selfsigned.crt:/etc/ssl/certs/selfsigned.crt
+      - ./selfsigned.key:/etc/ssl/private/selfsigned.key
+    depends_on:
+      - backend
+    restart: always
+
 
 volumes:
   postgres_data:
