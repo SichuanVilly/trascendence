@@ -21,16 +21,16 @@ class JWTAuthMiddleware(BaseMiddleware):
         # Se convierte la query string en un diccionario de parámetros.
         query_params = parse_qs(query_string)
 
-        # Se intenta obtener el token; se toma el primer valor si existe.
+        # Se intenta obtener el token se toma el primer valor si existe.
         token = query_params.get("token", [None])[0]
         # Se asigna un usuario anónimo por defecto al scope.
         scope["user"] = AnonymousUser()
 
-        # Si se encontró un token, se intenta obtener el usuario correspondiente.
+        # Si se encontro un token, se intenta obtener el usuario correspondiente.
         if token:
             user = await self.get_user_from_token(token)
             if user:
-                # Si se encuentra un usuario válido, se asigna al scope.
+                # Si se encuentra un usuario valido, se asigna al scope.
                 scope["user"] = user
 
         # Se continúa con la ejecución del siguiente middleware o del consumidor.

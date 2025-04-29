@@ -49,7 +49,6 @@ class OnlineUsersConsumer(AsyncWebsocketConsumer):
             await self.handle_accept_invite(data)
         elif msg_type == "cancel_invite":
             await self.handle_cancel_invite(data)
-        # Nota: "reject_invite" se puede gestionar en el cliente
 
     async def handle_invite(self, data):
         """Gestiona el envío de una invitación entre usuarios."""

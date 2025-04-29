@@ -45,7 +45,6 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
     def validate_password(self, value):
-        # Valida que la contraseña contenga al menos un número.
         if not re.search(r'\d', value):
             raise serializers.ValidationError("La contraseña debe contener al menos un número.")
         return value

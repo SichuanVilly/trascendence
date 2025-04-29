@@ -1,10 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser  # Ajusta el nombre si tu modelo se llama distinto
+from .models import CustomUser
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    # Opcionalmente, puedes personalizar cómo se muestran los campos en el admin
+
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'email', 'avatar')}),

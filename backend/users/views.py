@@ -18,7 +18,7 @@ from channels.layers import get_channel_layer
 from rest_framework.decorators import api_view, permission_classes
 
 from .serializers import UserSerializer, LoginSerializer
-from .models import MatchHistory, PendingRegistration  # Asegúrate de tener PendingRegistration en models
+from .models import MatchHistory, PendingRegistration
 
 User = get_user_model()
 
@@ -439,7 +439,7 @@ class SaveMatchView(APIView):
             return Response({"error": str(e)}, status=400)
 
 class PublicUserProfileView(APIView):
-    permission_classes = [IsAuthenticated]  # O AllowAny si deseas que sea público
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, username):
         user = get_object_or_404(User, username=username)

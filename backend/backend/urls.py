@@ -11,7 +11,7 @@ def test_api(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/users/', include('users.urls')),  # Rutas para usuarios
-    path('api/test/', test_api),  # Nueva ruta de prueba
+    path('api/test/', test_api),
     path("api/pong/", include("pong.urls")),
     path('api/chat/', include('chat.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

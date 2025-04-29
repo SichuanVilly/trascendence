@@ -15,16 +15,12 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-l9c*b*f+%27esc40y_%h)h&pb*!e1nr!!8#bi3x8)8_1obe#p#')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 
 HOST_IP = os.getenv("HOST_IP", "localhost")
 
-# Se agregan 'localhost' y '127.0.0.1' para evitar problemas en Docker
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", HOST_IP]
 
 # Modelo de usuario personalizado
@@ -95,7 +91,7 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],  # Rutas a directorios de plantillas si deseas
+        'DIRS': [],  # Rutas a directorios de plantillas
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -135,10 +131,10 @@ REST_FRAMEWORK = {
     ),
 }
 
-# Ajusta los tiempos de vigencia a tu gusto
+# Ajusta los tiempos de vigencia
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),  # Ej: 15 min
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),  # Ej: 1 día
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1), 
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
 }
 
 MEDIA_URL = '/media/'
@@ -167,5 +163,3 @@ EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = "transcendencepong42@gmail.com"
 
 
-# Si usas SSL, podrías configurar EMAIL_USE_SSL en su lugar:
-# EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False") == "True"

@@ -1,7 +1,7 @@
 import os
 import django
 
-# 1) Establecer la variable de entorno con el settings.py de tu proyecto
+# 1) Establecer la variable de entorno con el settings.py
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 
 # 2) Inicializar Django antes de importar módulos que dependen de él
@@ -11,7 +11,7 @@ import logging
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 
-# 3) Importa tu middleware DESPUÉS de django.setup()
+# 3) Importa middleware DESPUÉS de django.setup()
 from backend.jwt_middleware import JWTAuthMiddleware
 
 # 4) Importa tus rutas WebSocket
@@ -22,7 +22,7 @@ from pong.routing_ai import websocket_urlpatterns as pong_ai_ws
 # 5) Combina las rutas de "users" y "pong"
 websocket_patterns = users_ws + pong_ws + pong_ai_ws
 
-# 6) Configura logging (opcional)
+# 6) Configura logging
 logging.basicConfig(level=logging.DEBUG)
 logging.debug(f"📌 WebSocket patterns registrados: {websocket_patterns}")
 

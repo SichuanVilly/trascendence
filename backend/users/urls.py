@@ -1,6 +1,6 @@
 from django.urls import path, include
 from .views import RegisterView, LoginView, UserDetailView, OnlineUsersView, UserUpdateView, UserDetailView, UserDeleteView, AddFriendView, RemoveFriendView, BlockFriendView, UnblockFriendView, update_my_stat, MatchHistoryView, SaveMatchView,  PublicUserProfileView, VerifyCodeView, LoginVerifyView
-from backend.views import pong_room  # Importa la vista de la sala
+from backend.views import pong_room
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
