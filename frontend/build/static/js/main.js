@@ -705,7 +705,6 @@ function renderPrivateChatView(friendUsername) {
 
 
 function renderSettingsView() {
-
   const usernametoken = getUsername();
   const token = usernametoken ? getToken(usernametoken) : null;
 
@@ -714,28 +713,29 @@ function renderSettingsView() {
   })
     .then(response => response.json())
     .then(data => {
-      console.log("User data:", data);
+      // Determinar URL de avatar
       let avatarPath = data.avatar ? data.avatar : 'avatars/default_avatar.png';
-      if (avatarPath.startsWith('/media/')) {
-        avatarPath = avatarPath.slice(1);
-      }
+      if (avatarPath.startsWith('/media/')) avatarPath = avatarPath.slice(1);
       const avatarUrl = avatarPath.startsWith('http')
         ? avatarPath
         : `${API_BASE_URL}/${avatarPath}`;
 
+      // HTML — incluye dos canvases: uno para pie, otro para barras
       const contentHtml = `
         <h2 class="mt-4">Configuración de Usuario</h2>
         <div class="text-center my-4">
-          <img id="avatarImg" src="${avatarUrl}" alt="Avatar" style="width:150px; height:150px; border-radius:50%; cursor:pointer;">
-          <input type="file" id="avatarInput" style="display: none;" accept="image/*">
+          <img id="avatarImg" src="${avatarUrl}"
+               alt="Avatar"
+               style="width:150px; height:150px; border-radius:50%; cursor:pointer;">
+          <input type="file" id="avatarInput" style="display:none;" accept="image/*">
         </div>
         <div class="mb-3">
-          <label for="usernameInput" class="form-label">Nombre de Usuario:</label>
-          <input type="text" class="form-control" id="usernameInput" value="${data.username}">
+          <label class="form-label">Nombre de Usuario:</label>
+          <p class="form-control-plaintext">${data.username}</p>
         </div>
         <div class="mb-3">
           <label class="form-label">Correo electrónico:</label>
-          <p id="emailDisplay" class="form-control-plaintext">${data.email}</p>
+          <p class="form-control-plaintext">${data.email}</p>
         </div>
         <div class="mb-3">
           <p>Victorias: <span id="winsCount">${data.wins ?? 0}</span></p>
@@ -745,6 +745,10 @@ function renderSettingsView() {
         <div class="chart-container mb-4" style="width:300px; margin: auto;">
           <canvas id="winLossChart"></canvas>
         </div>
+        <!-- Gráfica de barras: total / victorias / derrotas -->
+        <div class="chart-container mb-4" style="width:300px; margin: auto;">
+          <canvas id="winLossBarChart"></canvas>
+        </div>
         <h4 class="mt-4">Últimas partidas</h4>
         <div id="matchHistory" class="mb-4">Cargando historial...</div>
         <button class="btn btn-primary" id="saveSettingsBtn">Guardar cambios</button>
@@ -753,143 +757,143 @@ function renderSettingsView() {
 
       renderLayout(contentHtml);
 
-      // Eventos de imagen y subida
+      // — Avatar preview & upload —
       document.getElementById("avatarImg").addEventListener("click", () => {
         document.getElementById("avatarInput").click();
       });
-      document.getElementById("avatarInput").addEventListener("change", function () {
+      document.getElementById("avatarInput").addEventListener("change", function() {
         const file = this.files[0];
         if (file) {
           const reader = new FileReader();
-          reader.onload = function (e) {
-            document.getElementById("avatarImg").src = e.target.result;
-          };
+          reader.onload = e => document.getElementById("avatarImg").src = e.target.result;
           reader.readAsDataURL(file);
         }
       });
 
-      // Inicializar la gráfica circular usando Chart.js
-      const wins = parseInt(document.getElementById("winsCount").innerText);
-      const losses = parseInt(document.getElementById("lossesCount").innerText);
-      let chartData, chartLabels, chartColors;
-      if (wins + losses > 0) {
-        const total = wins + losses;
-        const winsPercentage = Math.round((wins / total) * 100);
-        const lossesPercentage = 100 - winsPercentage;
-        chartData = [wins, losses];
-        chartLabels = [`Victorias ${winsPercentage}%`, `Derrotas ${lossesPercentage}%`];
-        chartColors = ["#28a745", "#dc3545"];
-      } else {
-        chartData = [1];
-        chartLabels = ["No data"];
-        chartColors = ["#6c757d"];
-      }
-      const ctx = document.getElementById("winLossChart").getContext("2d");
-      new Chart(ctx, {
-        type: "pie",
-        data: {
-          labels: chartLabels,
-          datasets: [{
-            data: chartData,
-            backgroundColor: chartColors,
-          }]
-        },
-        options: {
-          plugins: {
-            legend: {
-              position: "bottom"
-            }
-          }
-        }
-      });
-
-      // Guardar cambios (solo permite actualizar el nombre y la foto)
+      // — Guardar cambios (solo avatar) —
       document.getElementById("saveSettingsBtn").addEventListener("click", () => {
         const formData = new FormData();
-        const newUsername = document.getElementById("usernameInput").value;
-        formData.append("username", newUsername);
         const avatarFile = document.getElementById("avatarInput").files[0];
-        if (avatarFile) {
-          formData.append("avatar", avatarFile);
-        }
+        if (avatarFile) formData.append("avatar", avatarFile);
+
         fetch(`${API_BASE_URL}/api/users/update/`, {
           method: "PATCH",
           headers: { "Authorization": "Bearer " + token },
           body: formData
         })
-          .then(resp => {
-            if (!resp.ok) return resp.json().then(errData => { throw errData; });
-            return resp.json();
-          })
-          .then(updatedData => {
-            alert("Datos actualizados exitosamente.");
-            setUsername(updatedData.username);
+          .then(r => r.ok ? r.json() : r.json().then(e => { throw e; }))
+          .then(() => {
+            alert("Avatar actualizado.");
             renderSettingsView();
           })
-          .catch(err => {
-            console.error("Error actualizando datos:", err);
-            alert("Error al actualizar los datos.");
+          .catch(e => {
+            console.error("Error actualizando avatar:", e);
+            alert(e.error || "Error al guardar cambios.");
           });
       });
 
-      // Borrar cuenta
+      // — Borrar cuenta —
       document.getElementById("deleteUserBtn").addEventListener("click", () => {
-        if (confirm("¿Estás seguro de que deseas borrar tu cuenta? Esta acción no se puede deshacer.")) {
-          fetch(`${API_BASE_URL}/api/users/delete/`, {
-            method: "DELETE",
-            headers: { "Authorization": "Bearer " + token }
+        if (!confirm("¿Seguro que deseas borrar tu cuenta?")) return;
+        fetch(`${API_BASE_URL}/api/users/delete/`, {
+          method: "DELETE",
+          headers: { "Authorization": "Bearer " + token }
+        })
+          .then(r => r.ok ? r.json() : r.json().then(e => { throw e; }))
+          .then(() => {
+            alert("Cuenta eliminada.");
+            logout();
           })
-            .then(resp => {
-              if (!resp.ok) return resp.json().then(errData => { throw errData; });
-              return resp.json();
-            })
-            .then(() => {
-              alert("Cuenta eliminada exitosamente.");
-              logout();
-            })
-            .catch(err => {
-              console.error("Error eliminando usuario:", err);
-              alert("Error al eliminar la cuenta.");
-            });
-        }
+          .catch(e => {
+            console.error("Error borrando cuenta:", e);
+            alert(e.error || "Error al borrar cuenta.");
+          });
       });
 
-      // Cargar historial de partidas
+      // — Inicializar Gráfico Pie —
+      const wins   = +document.getElementById("winsCount").innerText;
+      const losses = +document.getElementById("lossesCount").innerText;
+      const total  = wins + losses;
+      const pieData    = total > 0 ? [wins, losses] : [1];
+      const pieLabels  = total > 0
+        ? [`Victorias ${Math.round(wins/total*100)}%`, `Derrotas ${100 - Math.round(wins/total*100)}%`]
+        : ["No data"];
+      const pieColors  = total > 0 ? ["#28a745","#dc3545"] : ["#6c757d"];
+      new Chart(
+        document.getElementById("winLossChart").getContext("2d"),
+        {
+          type: "pie",
+          data: {
+            labels: pieLabels,
+            datasets: [{ data: pieData, backgroundColor: pieColors }]
+          },
+          options: { plugins: { legend: { position: "bottom" } } }
+        }
+      );
+
+      new Chart(
+        document.getElementById("winLossBarChart").getContext("2d"),
+        {
+          type: "bar",
+          data: {
+            labels: ["Total Partidas", "Victorias", "Derrotas"],
+            datasets: [{
+              data: [total, wins, losses],
+              backgroundColor: ["#cccccc", "#28a745", "#dc3545"],
+            }],
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: total,                    // <- el máximo se ajusta al total
+                ticks: {
+                  stepSize: Math.ceil(total / 10) || 1  // divisiones legibles
+                }
+              }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        }
+      );
+
+
+      // — Cargar Historial de Partidas —
       fetch(`${API_BASE_URL}/api/users/match_history/`, {
         headers: { "Authorization": "Bearer " + token }
       })
-        .then(res => res.json())
+        .then(r => r.json())
         .then(matches => {
-          const container = document.getElementById("matchHistory");
+          const c = document.getElementById("matchHistory");
           if (!matches.length) {
-            container.innerHTML = "<p>No hay partidas registradas.</p>";
+            c.innerHTML = "<p>No hay partidas.</p>";
             return;
           }
-          container.style.maxHeight = "300px";
-          container.style.overflowY = "auto";
-          container.style.border = "1px solid #ccc";
-          container.style.padding = "10px";
-          container.style.borderRadius = "6px";
-          container.style.backgroundColor = "#f8f9fa";
-
-          container.innerHTML = matches.map(m => `
+          c.style.cssText = "max-height:300px;overflow-y:auto;border:1px solid #ccc;padding:10px;border-radius:6px;background:#f8f9fa";
+          c.innerHTML = matches.map(m => `
             <div class="card mb-2">
               <div class="card-body p-2">
-                <strong>${m.player1}</strong> ${m.score1} - ${m.score2} <strong>${m.player2}</strong><br>
+                <strong>${m.player1}</strong> ${m.score1}-${m.score2} <strong>${m.player2}</strong><br>
                 <small class="text-muted">Ganador: ${m.winner} | ${new Date(m.played_at).toLocaleString()}</small>
               </div>
             </div>
           `).join("");
         })
         .catch(err => {
-          document.getElementById("matchHistory").innerHTML = "<p>Error al cargar el historial.</p>";
-          console.error("Historial partidas:", err);
+          console.error("Error historial:", err);
+          document.getElementById("matchHistory").innerHTML = "<p>Error al cargar historial.</p>";
         });
+
     })
     .catch(err => {
       console.error("Error fetching user details:", err);
+      alert("No se pudo cargar la configuración.");
     });
 }
+
+
 
 
 function renderUserProfileView(username) {
@@ -1310,18 +1314,27 @@ function renderRegisterView() {
       <div class="col-md-4">
         <div class="card p-4 shadow">
           <h3 class="card-title text-center mb-3">Registro</h3>
-          <form id="registerForm">
+          <form id="registerForm" novalidate>
             <div class="mb-3">
               <label for="username" class="form-label">Usuario</label>
               <input type="text" class="form-control" id="username" required>
+              <div id="usernameError" class="form-text text-danger d-none">
+                El usuario debe tener máximo 10 caracteres y sólo letras, números o guión bajo.
+              </div>
             </div>
             <div class="mb-3">
               <label for="email" class="form-label">Correo electrónico</label>
               <input type="email" class="form-control" id="email" required>
+              <div id="emailError" class="form-text text-danger d-none">
+                Debe ser un correo electrónico válido.
+              </div>
             </div>
             <div class="mb-3">
               <label for="password" class="form-label">Contraseña</label>
               <input type="password" class="form-control" id="password" required>
+              <div id="passwordError" class="form-text text-danger d-none">
+                La contraseña debe contener al menos una mayúscula, una minúscula, un dígito y uno de estos símbolos: !@#$%^&*.
+              </div>
             </div>
             <button type="submit" class="btn btn-primary w-100">Registrarse</button>
           </form>
@@ -1331,17 +1344,71 @@ function renderRegisterView() {
     </div>
   `;
 
-  document.getElementById("registerForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const username = document.getElementById("username").value;
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
+  const form = document.getElementById("registerForm");
+  const usernameInput = document.getElementById("username");
+  const emailInput    = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
+  const uErr = document.getElementById("usernameError");
+  const eErr = document.getElementById("emailError");
+  const pErr = document.getElementById("passwordError");
 
+  function validateUsername(u) {
+    return /^[A-Za-z0-9_]{1,10}$/.test(u);
+  }
+  function validatePassword(p) {
+    return /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*])[A-Za-z\d!@#$%^&*]+$/.test(p);
+  }
+
+  async function checkUsernameExists(u) {
+    // Intentamos un endpoint de solo GET (debes implementarlo en tu API)
+    const resp = await fetch(`${API_BASE_URL}/api/users/check-username/?username=${u}`);
+    if (!resp.ok) return false;
+    const { exists } = await resp.json();
+    return exists;
+  }
+
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    // reset errores
+    uErr.classList.add("d-none");
+    eErr.classList.add("d-none");
+    pErr.classList.add("d-none");
+
+    const username = usernameInput.value.trim();
+    const email    = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    let ok = true;
+    if (!validateUsername(username)) {
+      uErr.textContent = "Usuario inválido: máximo 10 caracteres, sólo letras, números o “_”.";
+      uErr.classList.remove("d-none");
+      ok = false;
+    }
     if (!validateEmail(email)) {
-      alert("Por favor, ingresa un correo electrónico válido.");
-      return;
+      eErr.textContent = "Correo inválido.";
+      eErr.classList.remove("d-none");
+      ok = false;
+    }
+    if (!validatePassword(password)) {
+      pErr.textContent = "Contraseña inválida: necesita 1 mayúscula, 1 minúscula, 1 dígito y 1 símbolo !@#$%^&*.";
+      pErr.classList.remove("d-none");
+      ok = false;
+    }
+    if (!ok) return;
+
+    // Opcional: chequear unicidad antes de enviar
+    try {
+      const exists = await checkUsernameExists(username);
+      if (exists) {
+        uErr.textContent = "Este usuario ya está registrado.";
+        uErr.classList.remove("d-none");
+        return;
+      }
+    } catch (_) {
+      // si el endpoint no existe, lo omitimos y dejamos que el server devuelva el error
     }
 
+    // Si todo bien, enviamos al backend
     try {
       const resp = await fetch(`${API_BASE_URL}/api/users/register/`, {
         method: "POST",
@@ -1353,7 +1420,13 @@ function renderRegisterView() {
         alert("Registro exitoso. Se ha enviado un código de verificación.");
         renderVerificationView(username);
       } else {
-        alert(data.error || "Error en el registro");
+        // si el server dice “username exists”, lo mostramos
+        if (data.error && data.error.toLowerCase().includes("username")) {
+          uErr.textContent = data.error;
+          uErr.classList.remove("d-none");
+        } else {
+          alert(data.error || "Error en el registro");
+        }
       }
     } catch (err) {
       console.error("Error register:", err);
@@ -1361,6 +1434,7 @@ function renderRegisterView() {
     }
   });
 }
+
 
 function renderVerificationView(username) {
   const app = document.getElementById("app");
