@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "pong",
     "users",
     "chat",
+    "sslserver",
 ]
 
 # Configuración de Channels y Redis
