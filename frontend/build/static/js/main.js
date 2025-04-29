@@ -711,275 +711,271 @@ function renderSettingsView() {
   fetch(`${API_BASE_URL}/api/users/detail/`, {
     headers: { "Authorization": "Bearer " + token }
   })
-    .then(response => response.json())
-    .then(data => {
-      // Determinar URL de avatar
-      let avatarPath = data.avatar ? data.avatar : 'avatars/default_avatar.png';
-      if (avatarPath.startsWith('/media/')) avatarPath = avatarPath.slice(1);
-      const avatarUrl = avatarPath.startsWith('http')
-        ? avatarPath
-        : `${API_BASE_URL}/${avatarPath}`;
+  .then(resp => resp.json())
+  .then(data => {
+    // --- Avatar igual ---
+    let avatarPath = data.avatar || 'avatars/default_avatar.png';
+    if (avatarPath.startsWith('/media/')) avatarPath = avatarPath.slice(1);
+    const avatarUrl = avatarPath.startsWith('http')
+      ? avatarPath
+      : `${API_BASE_URL}/${avatarPath}`;
 
-      // HTML — incluye dos canvases: uno para pie, otro para barras
-      const contentHtml = `
-        <h2 class="mt-4">Configuración de Usuario</h2>
-        <div class="text-center my-4">
-          <img id="avatarImg" src="${avatarUrl}"
-               alt="Avatar"
-               style="width:150px; height:150px; border-radius:50%; cursor:pointer;">
-          <input type="file" id="avatarInput" style="display:none;" accept="image/*">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Nombre de Usuario:</label>
-          <p class="form-control-plaintext">${data.username}</p>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Correo electrónico:</label>
-          <p class="form-control-plaintext">${data.email}</p>
-        </div>
-        <div class="mb-3">
-          <p>Victorias: <span id="winsCount">${data.wins ?? 0}</span></p>
-          <p>Derrotas: <span id="lossesCount">${data.losses ?? 0}</span></p>
-        </div>
-        <!-- Gráfica circular para victorias y derrotas -->
-        <div class="chart-container mb-4" style="width:300px; margin: auto;">
+    // --- Total de partidas ---
+    const wins = data.wins || 0;
+    const losses = data.losses || 0;
+    const total = wins + losses;
+
+    // --- HTML con los dos canvas ---
+    const contentHtml = `
+      <h2 class="mt-4">Configuración de Usuario</h2>
+      <div class="text-center my-4">
+        <img id="avatarImg" src="${avatarUrl}" alt="Avatar"
+             style="width:150px;height:150px;border-radius:50%;cursor:pointer;">
+        <input type="file" id="avatarInput" style="display:none;" accept="image/*">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Nombre de Usuario:</label>
+        <p class="form-control-plaintext">${data.username}</p>
+      </div>
+
+      <div class="mb-3">
+        <label for="infoInput" class="form-label">Información</label>
+        <textarea class="form-control" id="infoInput" rows="3"
+          placeholder="Escribe aquí tu información...">${data.info||''}</textarea>
+      </div>
+
+      <div class="row mb-4">
+        <div class="col-12 col-md-6">
+          <h5 class="text-center">Victorias vs Derrotas</h5>
           <canvas id="winLossChart"></canvas>
         </div>
-        <!-- Gráfica de barras: total / victorias / derrotas -->
-        <div class="chart-container mb-4" style="width:300px; margin: auto;">
-          <canvas id="winLossBarChart"></canvas>
+        <div class="col-12 col-md-6">
+          <h5 class="text-center">Partidas Jugadas</h5>
+          <canvas id="barChart"></canvas>
         </div>
-        <h4 class="mt-4">Últimas partidas</h4>
-        <div id="matchHistory" class="mb-4">Cargando historial...</div>
-        <button class="btn btn-primary" id="saveSettingsBtn">Guardar cambios</button>
-        <button class="btn btn-danger mt-2" id="deleteUserBtn">Borrar Usuario</button>
-      `;
+      </div>
 
-      renderLayout(contentHtml);
+      <button class="btn btn-primary" id="saveSettingsBtn">Guardar cambios</button>
+      <button class="btn btn-danger mt-2" id="deleteUserBtn">Borrar Usuario</button>
 
-      // — Avatar preview & upload —
-      document.getElementById("avatarImg").addEventListener("click", () => {
-        document.getElementById("avatarInput").click();
-      });
-      document.getElementById("avatarInput").addEventListener("change", function() {
-        const file = this.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = e => document.getElementById("avatarImg").src = e.target.result;
-          reader.readAsDataURL(file);
-        }
-      });
+      <h4 class="mt-4">Últimas partidas</h4>
+      <div id="matchHistory" class="mb-4">Cargando historial...</div>
+    `;
+    renderLayout(contentHtml);
 
-      // — Guardar cambios (solo avatar) —
-      document.getElementById("saveSettingsBtn").addEventListener("click", () => {
-        const formData = new FormData();
-        const avatarFile = document.getElementById("avatarInput").files[0];
-        if (avatarFile) formData.append("avatar", avatarFile);
+    // --- Avatar handlers idénticos ---
+    document.getElementById("avatarImg").addEventListener("click",()=>document.getElementById("avatarInput").click());
+    document.getElementById("avatarInput").addEventListener("change",function(){
+      const f=this.files[0];
+      if(f){
+        const r=new FileReader();
+        r.onload=e=>document.getElementById("avatarImg").src=e.target.result;
+        r.readAsDataURL(f);
+      }
+    });
 
-        fetch(`${API_BASE_URL}/api/users/update/`, {
-          method: "PATCH",
-          headers: { "Authorization": "Bearer " + token },
-          body: formData
-        })
-          .then(r => r.ok ? r.json() : r.json().then(e => { throw e; }))
-          .then(() => {
-            alert("Avatar actualizado.");
-            renderSettingsView();
-          })
-          .catch(e => {
-            console.error("Error actualizando avatar:", e);
-            alert(e.error || "Error al guardar cambios.");
-          });
-      });
+    // --- Pie chart (Chart.js) ---
+    const pieCtx = document.getElementById("winLossChart").getContext("2d");
+    new Chart(pieCtx, {
+      type: "pie",
+      data: {
+        labels: [`Victorias (${wins})`, `Derrotas (${losses})`],
+        datasets: [{
+          data: [wins, losses],
+          backgroundColor: ["#28a745", "#dc3545"]
+        }]
+      },
+      options: {
+        plugins: { legend: { position: "bottom" } }
+      }
+    });
 
-      // — Borrar cuenta —
-      document.getElementById("deleteUserBtn").addEventListener("click", () => {
-        if (!confirm("¿Seguro que deseas borrar tu cuenta?")) return;
-        fetch(`${API_BASE_URL}/api/users/delete/`, {
-          method: "DELETE",
-          headers: { "Authorization": "Bearer " + token }
-        })
-          .then(r => r.ok ? r.json() : r.json().then(e => { throw e; }))
-          .then(() => {
-            alert("Cuenta eliminada.");
-            logout();
-          })
-          .catch(e => {
-            console.error("Error borrando cuenta:", e);
-            alert(e.error || "Error al borrar cuenta.");
-          });
-      });
-
-      // — Inicializar Gráfico Pie —
-      const wins   = +document.getElementById("winsCount").innerText;
-      const losses = +document.getElementById("lossesCount").innerText;
-      const total  = wins + losses;
-      const pieData    = total > 0 ? [wins, losses] : [1];
-      const pieLabels  = total > 0
-        ? [`Victorias ${Math.round(wins/total*100)}%`, `Derrotas ${100 - Math.round(wins/total*100)}%`]
-        : ["No data"];
-      const pieColors  = total > 0 ? ["#28a745","#dc3545"] : ["#6c757d"];
-      new Chart(
-        document.getElementById("winLossChart").getContext("2d"),
-        {
-          type: "pie",
-          data: {
-            labels: pieLabels,
-            datasets: [{ data: pieData, backgroundColor: pieColors }]
-          },
-          options: { plugins: { legend: { position: "bottom" } } }
-        }
-      );
-
-      new Chart(
-        document.getElementById("winLossBarChart").getContext("2d"),
-        {
-          type: "bar",
-          data: {
-            labels: ["Total Partidas", "Victorias", "Derrotas"],
-            datasets: [{
-              data: [total, wins, losses],
-              backgroundColor: ["#cccccc", "#28a745", "#dc3545"],
-            }],
-          },
-          options: {
-            scales: {
-              y: {
-                beginAtZero: true,
-                max: total,                    // <- el máximo se ajusta al total
-                ticks: {
-                  stepSize: Math.ceil(total / 10) || 1  // divisiones legibles
-                }
-              }
-            },
-            plugins: {
-              legend: { display: false }
-            }
+    // --- Bar chart ---
+    const barCtx = document.getElementById("barChart").getContext("2d");
+    new Chart(barCtx, {
+      type: "bar",
+      data: {
+        labels: ["Total", "Victorias", "Derrotas"],
+        datasets: [{
+          label: "Partidas",
+          data: [total, wins, losses],
+          backgroundColor: ["#6c757d", "#28a745", "#dc3545"]
+        }]
+      },
+      options: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: total
           }
+        },
+        plugins: {
+          legend: { display: false }
         }
-      );
+      }
+    });
 
+    // --- Guardar cambios (incluye info) ---
+    document.getElementById("saveSettingsBtn").addEventListener("click", () => {
+      const fd = new FormData();
+      const avatarF = document.getElementById("avatarInput").files[0];
+      if (avatarF) fd.append("avatar", avatarF);
+      fd.append("info", document.getElementById("infoInput").value.trim());
+      fetch(`${API_BASE_URL}/api/users/update/`, {
+        method: "PATCH",
+        headers: { "Authorization": "Bearer " + token },
+        body: fd
+      })
+      .then(r => {
+        if (!r.ok) return r.json().then(err=>{throw err;});
+        return r.json();
+      })
+      .then(() => {
+        alert("Datos actualizados.");
+        renderSettingsView();
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error al actualizar.");
+      });
+    });
 
-      // — Cargar Historial de Partidas —
-      fetch(`${API_BASE_URL}/api/users/match_history/`, {
+    // --- Borrar cuenta e historial idéntico a antes ---
+    document.getElementById("deleteUserBtn").addEventListener("click", () => {
+      if (!confirm("¿Seguro?")) return;
+      fetch(`${API_BASE_URL}/api/users/delete/`, {
+        method: "DELETE",
         headers: { "Authorization": "Bearer " + token }
       })
-        .then(r => r.json())
-        .then(matches => {
-          const c = document.getElementById("matchHistory");
-          if (!matches.length) {
-            c.innerHTML = "<p>No hay partidas.</p>";
-            return;
-          }
-          c.style.cssText = "max-height:300px;overflow-y:auto;border:1px solid #ccc;padding:10px;border-radius:6px;background:#f8f9fa";
-          c.innerHTML = matches.map(m => `
-            <div class="card mb-2">
-              <div class="card-body p-2">
-                <strong>${m.player1}</strong> ${m.score1}-${m.score2} <strong>${m.player2}</strong><br>
-                <small class="text-muted">Ganador: ${m.winner} | ${new Date(m.played_at).toLocaleString()}</small>
-              </div>
-            </div>
-          `).join("");
-        })
-        .catch(err => {
-          console.error("Error historial:", err);
-          document.getElementById("matchHistory").innerHTML = "<p>Error al cargar historial.</p>";
-        });
+      .then(r => {
+        if (!r.ok) return r.json().then(err=>{throw err;});
+        return r.json();
+      })
+      .then(() => { alert("Cuenta borrada."); logout(); })
+      .catch(err => { console.error(err); alert("Error al borrar."); });
+    });
 
+    // --- Historial de partidas idéntico ---
+    fetch(`${API_BASE_URL}/api/users/match_history/`, {
+      headers: { "Authorization": "Bearer " + token }
+    })
+    .then(r => r.json())
+    .then(matches => {
+      const c = document.getElementById("matchHistory");
+      if (!matches.length) {
+        c.innerHTML = "<p>No hay partidas.</p>";
+        return;
+      }
+      c.style.cssText = "max-height:300px;overflow-y:auto;border:1px solid #ccc;"
+                      + "padding:10px;border-radius:6px;background:#f8f9fa";
+      c.innerHTML = matches.map(m => `
+        <div class="card mb-2">
+          <div class="card-body p-2">
+            <strong>${m.player1}</strong> ${m.score1} - ${m.score2}
+            <strong>${m.player2}</strong><br>
+            <small class="text-muted">
+              Ganador: ${m.winner} | ${new Date(m.played_at).toLocaleString()}
+            </small>
+          </div>
+        </div>
+      `).join("");
     })
     .catch(err => {
-      console.error("Error fetching user details:", err);
-      alert("No se pudo cargar la configuración.");
+      console.error("Historial:", err);
+      document.getElementById("matchHistory").innerHTML = "<p>Error al cargar historial.</p>";
     });
+
+  })
+  .catch(err => console.error("Error fetching user details:", err));
 }
+
+
 
 
 
 
 function renderUserProfileView(username) {
-  const usernameyoken = getUsername();
-  const token = usernameyoken ? getToken(usernameyoken) : null;
-  // Se asume que este endpoint está definido en el backend y retorna datos públicos del usuario
+  const usernameToken = getUsername();
+  const token = usernameToken ? getToken(usernameToken) : null;
+
   fetch(`${API_BASE_URL}/api/users/profile/${username}/`, {
     headers: { "Authorization": "Bearer " + token }
   })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error("HTTP error " + response.status);
-      }
-      return response.json();
-    })
-    .then(data => {
-      console.log("Perfil del usuario:", data);
-      let avatarPath = data.avatar ? data.avatar : 'avatars/default_avatar.png';
-      if (avatarPath.startsWith('/media/')) {
-        avatarPath = avatarPath.slice(1);
-      }
-      const avatarUrl = avatarPath.startsWith('http')
-        ? avatarPath
-        : `${API_BASE_URL}/${avatarPath}`;
+  .then(response => {
+    if (!response.ok) throw new Error("HTTP error " + response.status);
+    return response.json();
+  })
+  .then(data => {
+    // Construcción de la URL del avatar
+    let avatarPath = data.avatar || 'avatars/default_avatar.png';
+    if (avatarPath.startsWith('/media/')) avatarPath = avatarPath.slice(1);
+    const avatarUrl = avatarPath.startsWith('http')
+      ? avatarPath
+      : `${API_BASE_URL}/${avatarPath}`;
 
-      const contentHtml = `
-        <h2 class="mt-4">Perfil de Usuario</h2>
-        <div class="text-center my-4">
-          <img src="${avatarUrl}" alt="Avatar de ${data.username}" style="width:150px; height:150px; border-radius:50%;">
-        </div>
-        <div class="mb-3">
-          <p><strong>Nombre de Usuario:</strong> ${data.username}</p>
-        </div>
-        <div class="mb-3">
-          <p><strong>Victorias:</strong> <span id="winsCount">${data.wins ?? 0}</span></p>
-          <p><strong>Derrotas:</strong> <span id="lossesCount">${data.losses ?? 0}</span></p>
-        </div>
-        <!-- Gráfica circular para victorias y derrotas -->
-        <div class="chart-container mb-4" style="width:300px; margin: auto;">
-          <canvas id="winLossChart"></canvas>
-        </div>
-        <button class="btn btn-secondary" onclick="renderChatView()">Volver al Chat</button>
-      `;
+    // Inyectamos el HTML, incluyendo el nuevo campo "Info"
+    const contentHtml = `
+      <h2 class="mt-4">Perfil de Usuario</h2>
+      <div class="text-center my-4">
+        <img src="${avatarUrl}" alt="Avatar de ${data.username}"
+             style="width:150px; height:150px; border-radius:50%;">
+      </div>
 
-      renderLayout(contentHtml);
+      <div class="mb-3">
+        <p><strong>Nombre de Usuario:</strong> ${data.username}</p>
+      </div>
 
-      // Inicializar la gráfica circular usando Chart.js
-      const wins = parseInt(document.getElementById("winsCount").innerText);
-      const losses = parseInt(document.getElementById("lossesCount").innerText);
-      let chartData, chartLabels, chartColors;
-      if (wins + losses > 0) {
-        const total = wins + losses;
-        const winsPercentage = Math.round((wins / total) * 100);
-        const lossesPercentage = 100 - winsPercentage;
-        chartData = [wins, losses];
-        chartLabels = [`Victorias ${winsPercentage}%`, `Derrotas ${lossesPercentage}%`];
-        chartColors = ["#28a745", "#dc3545"];
-      } else {
-        chartData = [1];
-        chartLabels = ["No data"];
-        chartColors = ["#6c757d"];
-      }
-      const ctx = document.getElementById("winLossChart").getContext("2d");
-      new Chart(ctx, {
-        type: "pie",
-        data: {
-          labels: chartLabels,
-          datasets: [{
-            data: chartData,
-            backgroundColor: chartColors,
-          }]
-        },
-        options: {
-          plugins: {
-            legend: {
-              position: "bottom"
-            }
-          }
-        }
-      });
-    })
-    .catch(err => {
-      console.error("Error fetching user profile:", err);
-      alert("Error al obtener el perfil del usuario.");
+      <!-- Nuevo campo Info (sólo lectura) -->
+      <div class="mb-3">
+        <p><strong>Información:</strong></p>
+        <p class="border rounded p-2">${data.info || '<em>Sin información</em>'}</p>
+      </div>
+
+      <div class="mb-3">
+        <p><strong>Victorias:</strong> <span id="winsCount">${data.wins ?? 0}</span></p>
+        <p><strong>Derrotas:</strong> <span id="lossesCount">${data.losses ?? 0}</span></p>
+      </div>
+
+      <!-- Gráfica circular para victorias/derrotas -->
+      <div class="chart-container mb-4" style="width:300px; margin:auto;">
+        <canvas id="winLossChart"></canvas>
+      </div>
+
+      <button class="btn btn-secondary" onclick="renderChatView()">Volver al Chat</button>
+    `;
+    renderLayout(contentHtml);
+
+    // Inicializar la gráfica circular con Chart.js
+    const wins = parseInt(document.getElementById("winsCount").innerText);
+    const losses = parseInt(document.getElementById("lossesCount").innerText);
+    let chartData, chartLabels, chartColors;
+
+    if (wins + losses > 0) {
+      const total = wins + losses;
+      const winsPct = Math.round((wins / total) * 100);
+      chartData   = [wins, losses];
+      chartLabels = [`Victorias ${winsPct}%`, `Derrotas ${100 - winsPct}%`];
+      chartColors = ["#28a745", "#dc3545"];
+    } else {
+      chartData   = [1];
+      chartLabels = ["No data"];
+      chartColors = ["#6c757d"];
+    }
+
+    const ctx = document.getElementById("winLossChart").getContext("2d");
+    new Chart(ctx, {
+      type: "pie",
+      data: { labels: chartLabels, datasets: [{ data: chartData, backgroundColor: chartColors }] },
+      options: { plugins: { legend: { position: "bottom" } } }
     });
+  })
+  .catch(err => {
+    console.error("Error fetching user profile:", err);
+    alert("Error al obtener el perfil del usuario.");
+  });
 }
+
 
 
 

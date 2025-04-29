@@ -11,6 +11,11 @@ class CustomUser(AbstractUser):
     # Campos adicionales
     wins = models.IntegerField(default=0)
     losses = models.IntegerField(default=0)
+    info = models.TextField(
+        blank=True,
+        default='',
+        help_text="Información adicional que el usuario quiera mostrar"
+    )
     #ManyToManyField('self'): Permite que cada usuario se relacione con otros usuarios.
     #symmetrical=True: Significa que la relación es bidireccional (si A es amigo de B, B es amigo de A).
     #blank=True: Permite que este campo sea opcional.

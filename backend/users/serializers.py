@@ -22,6 +22,11 @@ class FriendSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6, required=True)
     avatar = serializers.ImageField(use_url=True, required=False, allow_null=True)
+    info = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Información pública del usuario"
+    )
     friends = FriendSerializer(many=True, read_only=True)
     blocked_friends = FriendSerializer(many=True, read_only=True)
     
@@ -29,13 +34,14 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'password', 'email', 'avatar',
-            'wins', 'losses', 'friends', 'blocked_friends'
+            'wins', 'losses', 'info', 'friends', 'blocked_friends'
         ]
         extra_kwargs = {
             'password': {'write_only': True, 'required': True},
             'wins': {'read_only': True},
             'losses': {'read_only': True},
             'email': {'required': True},
+            'info': {'required': False},
         }
 
     def validate_password(self, value):
