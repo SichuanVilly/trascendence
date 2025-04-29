@@ -1,0 +1,179 @@
+DJANGO_SECRET_KEY= 'django-insecure-l9c*b*f+%27esc40y_%h)h&pb*!e1nr!!8#bi3x8)8_1obe#p#'
+DJANGO_DEBUG=False
+HOST_IP=192.168.1.156
+
+POSTGRES_DB=transcendence_db
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_HOST=transcendence_db
+POSTGRES_PORT=5432
+
+EMAIL_HOST_PASSWORD='ydizfvjhmincbaew'
+
+hostname -I  
+http://192.168.122.1:8080/#login
+ifconfig
+
+-------------listo----------------
+
+* Major module: Use a Framework as backend.
+In this major module, you are required to utilize a specific web framework for your
+backend development, and that framework is Django .
+
+python manage.py --version
+requirements.txt -> Django
+pip freeze | grep Django
+
+
+-------------listo----------------
+
+
+Minor module: Use a front-end framework or toolkit.
+Your frontend development will utilize the Bootstrap toolkit .
+
+npm ls bootstrap
+
+
+Minor module: Use a database for the backend -and more.
+The designated database for all DB instances in your project is PostgreSQL .
+This choice guarantees data consistency and compatibility across all project components and may be a prerequisite for other modules, such as the backend Framework module.
+
+docker ps
+alias dbpsql='docker-compose exec db psql -U postgres -d transcendence_db'
+\dt
+\d users_customuser
+SELECT username, password FROM users_customuser;
+\q
+
+-------------listo----------------
+
+Major module: Standard user management, authentication, users across tournaments.
+◦ Users can subscribe to the website in a secure way.
+◦ Registered users can log in in a secure way.
+◦ Users can select a unique display name to play the tournaments.
+◦ Users can update their information.
+◦ Users can upload an avatar, with a default option if none is provided.
+◦ Users can add others as friends and view their online status.
+◦ User profiles display stats, such as wins and losses.
+◦ Each user has a Match History including 1v1 games, dates, and relevant
+details, accessible to logged-in users.
+
+
+-------------listo----------------
+
+Major module: Remote players
+It is possible to have two distant players. Each player is located on a separated
+computer, accessing the same website and playing the same Pong game
+
+-------------listo----------------
+
+Major module: Live Chat.
+You have to create a chat for your users in this module:
+◦ The user should be able to send direct messages to other users.
+◦ The user should be able to block other users. This way, they will see no more
+messages from the account they blocked.
+◦ The user should be able to invite other users to play a Pong game through the
+chat interface.
+◦ The tournament system should be able to warn users expected for the next
+game.
+◦ The user should be able to access other players profiles through the chat interface.
+
+-------------listo----------------
+
+* Major module: Introduce an AI Opponent.
+In this major module, the objective is to incorporate an AI player into the game.
+Notably, the use of the A* algorithm is not permitted for this task. Key features
+and goals include:
+◦ Develop an AI opponent that provides a challenging and engaging gameplay
+experience for users.
+◦ The AI must replicate human behavior, meaning that in your AI implementation, you must simulate keyboard input. The constraint here is that the AI
+can only refresh its view of the game once per second, requiring it to anticipate
+bounces and other actions.
+
+◦ Implement AI logic and decision-making processes that enable the AI player
+to make intelligent and strategic moves.
+◦ Explore alternative algorithms and techniques to create an effective AI player
+without relying on A*.
+◦ Ensure that the AI adapts to different gameplay scenarios and user interactions.
+
+consumers_ai.py
+
+-------------listo----------------
+
+* Major module: Replacing Basic Pong with Server-Side Pong and Implementing
+an API.
+In this major module, the goal is to replace the basic Pong game with a serverside Pong game, accompanied by the implementation of an API. Key features and
+objectives include:
+◦ Develop server-side logic for the Pong game to handle gameplay, ball movement, scoring, and player interactions.
+◦ Create an API that exposes the necessary resources and endpoints to interact
+with the Pong game, allowing partial usage of the game via the Command-Line
+Interface (CLI) and web interface.
+◦ Design and implement the API endpoints to support game initialization, player
+controls, and game state updates.
+◦ Ensure that the server-side Pong game is responsive, providing an engaging
+and enjoyable gaming experience.
+◦ Integrate the server-side Pong game with the web application, allowing users
+to play the game directly on the website.
+This major module aims to elevate the Pong game by migrating it to the server
+side, enabling interaction through both a web interface and CLI while offering an
+API for easy access to game resources and features.
+
+
+
+
+-------------listo----------------
+
+Major module: Implement Two-Factor Authentication (2FA) and JWT.
+In this major module, the goal is to enhance security and user authentication
+by introducing Two-Factor Authentication (2FA) and utilizing JSON Web Tokens
+(JWT). Key features and objectives include:
+◦ Implement Two-Factor Authentication (2FA) as an additional layer of security
+for user accounts, requiring users to provide a secondary verification method,
+such as a one-time code, in addition to their password.
+◦ Utilize JSON Web Tokens (JWT) as a secure method for authentication and
+authorization, ensuring that user sessions and access to resources are managed
+securely.
+◦ Provide a user-friendly setup process for enabling 2FA, with options for SMS
+codes, authenticator apps, or email-based verification.
+◦ Ensure that JWT tokens are issued and validated securely to prevent unauthorized access to user accounts and sensitive data.
+This major module aims to strengthen user account security by offering Two-Factor
+Authentication (2FA) and enhancing authentication and authorization through the
+use of JSON Web Tokens (JWT).
+
+-------------listo----------------
+
+* Minor module: User and Game Stats Dashboards.
+In this minor module, the goal is to introduce dashboards that display statistics for
+individual users and game sessions. Key features and objectives include:
+◦ Create user-friendly dashboards that provide users with insights into their own
+gaming statistics.
+
+◦ Develop a separate dashboard for game sessions, showing detailed statistics,
+outcomes, and historical data for each match.
+◦ Ensure that the dashboards offer an intuitive and informative user interface
+for tracking and analyzing data.
+◦ Implement data visualization techniques, such as charts and graphs, to present
+statistics in a clear and visually appealing manner.
+◦ Allow users to access and explore their own gaming history and performance
+metrics conveniently.
+◦ Feel free to add any metrics you deem useful.
+This minor module aims to empower users with the ability to monitor their gaming
+statistics and game session details through user-friendly dashboards, providing a
+comprehensive view of their gaming experience
+
+
+* Minor module: Expanding Browser Compatibility.
+In this minor module, the objective is to enhance the compatibility of the web
+application by adding support for an additional web browser. Key features and
+objectives include:
+◦ Extend browser support to include an additional web browser, ensuring that
+users can access and use the application seamlessly.
+◦ Conduct thorough testing and optimization to ensure that the web application
+functions correctly and displays correctly in the newly supported browser.
+◦ Address any compatibility issues or rendering discrepancies that may arise in
+the added web browser.
+◦ Ensure a consistent user experience across all supported browsers, maintaining
+usability and functionality.
+This minor module aims to broaden the accessibility of the web application by
+supporting an additional web browser, providing users with more choices for their
+browsing experience.
